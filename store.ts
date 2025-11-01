@@ -269,9 +269,35 @@ function createDefaultInntekterCategory(): Hovedkategori {
     type: 'hovedkategori',
     isIncome: true,
     underkategorier: [],
-    color: '#10b981', // Green
+    color: '#10b981',
     icon: '💰',
     sortOrder: 0,
+  };
+}
+
+function createDefaultSparingCategory(): Hovedkategori {
+  return {
+    id: 'sparing',
+    name: 'Sparing',
+    type: 'hovedkategori',
+    isIncome: true,
+    underkategorier: [],
+    color: '#3b82f6',
+    icon: '💎',
+    sortOrder: 1,
+  };
+}
+
+function createDefaultOverfortCategory(): Hovedkategori {
+  return {
+    id: 'overfort',
+    name: 'Overført',
+    type: 'hovedkategori',
+    isIncome: true,
+    underkategorier: [],
+    color: '#8b5cf6',
+    icon: '↔️',
+    sortOrder: 2,
   };
 }
 
@@ -300,6 +326,8 @@ export const useTransactionStore = create<TransactionStore>()(
         // Initial State
         hovedkategorier: new Map([
           ['cat_inntekter_default', createDefaultInntekterCategory()],
+          ['sparing', createDefaultSparingCategory()],
+          ['overfort', createDefaultOverfortCategory()],
         ]),
         underkategorier: new Map(),
         transactions: [],
@@ -774,6 +802,8 @@ export const useTransactionStore = create<TransactionStore>()(
           set({
             hovedkategorier: new Map([
               ['cat_inntekter_default', createDefaultInntekterCategory()],
+              ['sparing', createDefaultSparingCategory()],
+              ['overfort', createDefaultOverfortCategory()],
             ]),
             underkategorier: new Map(),
             transactions: [],
