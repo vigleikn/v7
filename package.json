@@ -1,0 +1,54 @@
+{
+  "name": "transaction-csv-parser",
+  "version": "1.0.0",
+  "description": "CSV parser for Norwegian bank transactions with duplicate detection",
+  "main": "csvParser.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "tsx quickstart.ts",
+    "example": "tsx example.ts",
+    "test": "tsx test.ts",
+    "category:example": "tsx categoryEngineExample.ts",
+    "category:test": "tsx categoryEngineTest.ts",
+    "store:test": "tsx storeTest.ts",
+    "transaction:test": "tsx transactionTableTest.ts",
+    "persistence:demo": "tsx persistenceDemo.ts",
+    "storage:test": "tsx dev/localStorageTest.ts",
+    "import:test": "tsx dev/csvImportFlowTest.ts",
+    "seed:categories": "tsx dev/seedCategories.ts",
+    "diagnose": "tsx dev/diagnostics.ts",
+    "sync:browser": "tsx dev/syncToLocalStorage.ts",
+    "test:e2e": "tsx dev/endToEndTest.ts"
+  },
+  "keywords": [
+    "csv",
+    "parser",
+    "transactions",
+    "banking"
+  ],
+  "dependencies": {
+    "zustand": "^4.4.7",
+    "immer": "^10.0.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "@vitejs/plugin-react": "^4.2.1",
+    "vite": "^5.0.8",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "tailwindcss": "^3.4.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.4.32"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  }
+}
+

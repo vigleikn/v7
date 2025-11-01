@@ -1,0 +1,415 @@
+{
+  "version": "1.0.0",
+  "lastSaved": "2025-11-01T00:38:22.251Z",
+  "transactions": [],
+  "hovedkategorier": [
+    [
+      "cat_inntekter_default",
+      {
+        "id": "cat_inntekter_default",
+        "name": "Inntekter",
+        "type": "hovedkategori",
+        "isIncome": true,
+        "underkategorier": [
+          "cat_1761957226551_x04jot1uk",
+          "cat_1761957226551_q0271mp06",
+          "cat_1761957226551_hwm9w4x6k"
+        ],
+        "color": "#10b981",
+        "icon": "💰",
+        "sortOrder": 0
+      }
+    ],
+    [
+      "cat_1761957226548_i1pj0tf2z",
+      {
+        "name": "Forutsigbare utgifter",
+        "isIncome": false,
+        "id": "cat_1761957226548_i1pj0tf2z",
+        "type": "hovedkategori",
+        "underkategorier": [
+          "cat_1761957226549_955f3y798",
+          "cat_1761957226549_7kcsatb4x",
+          "cat_1761957226549_9875mjdut",
+          "cat_1761957226549_qxnd4f3li",
+          "cat_1761957226549_fm8951903",
+          "cat_1761957226549_xb6zxz13w",
+          "cat_1761957226549_9h1b1wor9",
+          "cat_1761957226550_cwermrcwn",
+          "cat_1761957226550_djg2ep8pp",
+          "cat_1761957226550_i980fchc5"
+        ],
+        "color": "#ef4444",
+        "icon": "📅",
+        "sortOrder": 1
+      }
+    ],
+    [
+      "cat_1761957226550_5mcm4wowv",
+      {
+        "name": "Uforutsigbare utgifter",
+        "isIncome": false,
+        "id": "cat_1761957226550_5mcm4wowv",
+        "type": "hovedkategori",
+        "underkategorier": [
+          "cat_1761957226550_khysclmmj",
+          "cat_1761957226550_tobbv531j",
+          "cat_1761957226550_iqvsngt8z",
+          "cat_1761957226550_jyc86t27x",
+          "cat_1761957226550_xpaywhj8q",
+          "cat_1761957226550_14tlr5jk7",
+          "cat_1761957226550_vi3mcpl2o",
+          "cat_1761957226550_f2w7v87gs",
+          "cat_1761957226550_cc232bfux"
+        ],
+        "color": "#f59e0b",
+        "icon": "❓",
+        "sortOrder": 2
+      }
+    ],
+    [
+      "cat_1761957226550_wonqx8fh7",
+      {
+        "name": "Livsopphold",
+        "isIncome": false,
+        "id": "cat_1761957226550_wonqx8fh7",
+        "type": "hovedkategori",
+        "underkategorier": [
+          "cat_1761957226550_r05xqo8zz",
+          "cat_1761957226550_a7ipaf64e",
+          "cat_1761957226551_e8k47guny",
+          "cat_1761957226551_jh4362o77",
+          "cat_1761957226551_e5csnckck",
+          "cat_1761957226551_j2msyc6jt",
+          "cat_1761957226551_plxavc8nx"
+        ],
+        "color": "#10b981",
+        "icon": "🛒",
+        "sortOrder": 3
+      }
+    ]
+  ],
+  "underkategorier": [
+    [
+      "cat_1761957226549_955f3y798",
+      {
+        "name": "Kommunalt",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226549_955f3y798",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 0
+      }
+    ],
+    [
+      "cat_1761957226549_7kcsatb4x",
+      {
+        "name": "Nett og tlf",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226549_7kcsatb4x",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 1
+      }
+    ],
+    [
+      "cat_1761957226549_9875mjdut",
+      {
+        "name": "Streaming abo.",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226549_9875mjdut",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 2
+      }
+    ],
+    [
+      "cat_1761957226549_qxnd4f3li",
+      {
+        "name": "Strøm",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226549_qxnd4f3li",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 3
+      }
+    ],
+    [
+      "cat_1761957226549_fm8951903",
+      {
+        "name": "Studielån og fagforening",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226549_fm8951903",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 4
+      }
+    ],
+    [
+      "cat_1761957226549_xb6zxz13w",
+      {
+        "name": "Tidsskrift",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226549_xb6zxz13w",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 5
+      }
+    ],
+    [
+      "cat_1761957226549_9h1b1wor9",
+      {
+        "name": "Treningsavgift",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226549_9h1b1wor9",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 6
+      }
+    ],
+    [
+      "cat_1761957226550_cwermrcwn",
+      {
+        "name": "Veldedighet",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226550_cwermrcwn",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 7
+      }
+    ],
+    [
+      "cat_1761957226550_djg2ep8pp",
+      {
+        "name": "Husleie",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226550_djg2ep8pp",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 8
+      }
+    ],
+    [
+      "cat_1761957226550_i980fchc5",
+      {
+        "name": "Forsikring",
+        "parentId": "cat_1761957226548_i1pj0tf2z",
+        "id": "cat_1761957226550_i980fchc5",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226548_i1pj0tf2z",
+        "sortOrder": 9
+      }
+    ],
+    [
+      "cat_1761957226550_khysclmmj",
+      {
+        "name": "Elektronikk",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_khysclmmj",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 0
+      }
+    ],
+    [
+      "cat_1761957226550_tobbv531j",
+      {
+        "name": "Familieaktiviteter",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_tobbv531j",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 1
+      }
+    ],
+    [
+      "cat_1761957226550_iqvsngt8z",
+      {
+        "name": "Ferie",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_iqvsngt8z",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 2
+      }
+    ],
+    [
+      "cat_1761957226550_jyc86t27x",
+      {
+        "name": "Gaver",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_jyc86t27x",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 3
+      }
+    ],
+    [
+      "cat_1761957226550_xpaywhj8q",
+      {
+        "name": "Hobby",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_xpaywhj8q",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 4
+      }
+    ],
+    [
+      "cat_1761957226550_14tlr5jk7",
+      {
+        "name": "Interiør",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_14tlr5jk7",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 5
+      }
+    ],
+    [
+      "cat_1761957226550_vi3mcpl2o",
+      {
+        "name": "Planter",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_vi3mcpl2o",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 6
+      }
+    ],
+    [
+      "cat_1761957226550_f2w7v87gs",
+      {
+        "name": "Utstyr",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_f2w7v87gs",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 7
+      }
+    ],
+    [
+      "cat_1761957226550_cc232bfux",
+      {
+        "name": "Velvære",
+        "parentId": "cat_1761957226550_5mcm4wowv",
+        "id": "cat_1761957226550_cc232bfux",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_5mcm4wowv",
+        "sortOrder": 8
+      }
+    ],
+    [
+      "cat_1761957226550_r05xqo8zz",
+      {
+        "name": "Bil",
+        "parentId": "cat_1761957226550_wonqx8fh7",
+        "id": "cat_1761957226550_r05xqo8zz",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_wonqx8fh7",
+        "sortOrder": 0
+      }
+    ],
+    [
+      "cat_1761957226550_a7ipaf64e",
+      {
+        "name": "Dagligvarer",
+        "parentId": "cat_1761957226550_wonqx8fh7",
+        "id": "cat_1761957226550_a7ipaf64e",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_wonqx8fh7",
+        "sortOrder": 1
+      }
+    ],
+    [
+      "cat_1761957226551_e8k47guny",
+      {
+        "name": "Helse",
+        "parentId": "cat_1761957226550_wonqx8fh7",
+        "id": "cat_1761957226551_e8k47guny",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_wonqx8fh7",
+        "sortOrder": 2
+      }
+    ],
+    [
+      "cat_1761957226551_jh4362o77",
+      {
+        "name": "Klær",
+        "parentId": "cat_1761957226550_wonqx8fh7",
+        "id": "cat_1761957226551_jh4362o77",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_wonqx8fh7",
+        "sortOrder": 3
+      }
+    ],
+    [
+      "cat_1761957226551_e5csnckck",
+      {
+        "name": "Mat ute",
+        "parentId": "cat_1761957226550_wonqx8fh7",
+        "id": "cat_1761957226551_e5csnckck",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_wonqx8fh7",
+        "sortOrder": 4
+      }
+    ],
+    [
+      "cat_1761957226551_j2msyc6jt",
+      {
+        "name": "Skole",
+        "parentId": "cat_1761957226550_wonqx8fh7",
+        "id": "cat_1761957226551_j2msyc6jt",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_wonqx8fh7",
+        "sortOrder": 5
+      }
+    ],
+    [
+      "cat_1761957226551_plxavc8nx",
+      {
+        "name": "Sykkel",
+        "parentId": "cat_1761957226550_wonqx8fh7",
+        "id": "cat_1761957226551_plxavc8nx",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_1761957226550_wonqx8fh7",
+        "sortOrder": 6
+      }
+    ],
+    [
+      "cat_1761957226551_x04jot1uk",
+      {
+        "name": "Andre inntekter",
+        "parentId": "cat_inntekter_default",
+        "id": "cat_1761957226551_x04jot1uk",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_inntekter_default",
+        "sortOrder": 0
+      }
+    ],
+    [
+      "cat_1761957226551_q0271mp06",
+      {
+        "name": "Torghatten",
+        "parentId": "cat_inntekter_default",
+        "id": "cat_1761957226551_q0271mp06",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_inntekter_default",
+        "sortOrder": 1
+      }
+    ],
+    [
+      "cat_1761957226551_hwm9w4x6k",
+      {
+        "name": "UDI",
+        "parentId": "cat_inntekter_default",
+        "id": "cat_1761957226551_hwm9w4x6k",
+        "type": "underkategori",
+        "hovedkategoriId": "cat_inntekter_default",
+        "sortOrder": 2
+      }
+    ]
+  ],
+  "rules": [],
+  "locks": []
+}

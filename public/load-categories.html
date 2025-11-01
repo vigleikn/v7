@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Last Kategorier</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1 { color: #1f2937; margin-bottom: 10px; }
+        .info { color: #6b7280; margin-bottom: 20px; }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+        }
+        button:hover { background: #2563eb; }
+        .success { background: #10b981; padding: 15px; border-radius: 6px; color: white; margin-top: 20px; display: none; }
+        .error { background: #ef4444; padding: 15px; border-radius: 6px; color: white; margin-top: 20px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📁 Last Kategorier</h1>
+        <p class="info">Klikk for å laste 33 kategorier til localStorage</p>
+        
+        <button onclick="loadData()">Last kategorier</button>
+        
+        <div id="success" class="success"></div>
+        <div id="error" class="error"></div>
+    </div>
+
+    <script>
+        async function loadData() {
+            try {
+                const response = await fetch('/initial-data.json');
+                const data = await response.json();
+                
+                // Store in localStorage
+                localStorage.setItem('transaction-app-data', JSON.stringify(data));
+                
+                document.getElementById('success').style.display = 'block';
+                document.getElementById('success').textContent = 
+                    '✅ Lastet ' + data.hovedkategorier.length + ' hovedkategorier og ' + 
+                    data.underkategorier.length + ' underkategorier! Går til appen...';
+                
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1500);
+            } catch (error) {
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = '❌ Feil: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
