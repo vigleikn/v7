@@ -40,6 +40,8 @@ export interface Hovedkategori extends Category {
   color?: string; // UI color
   icon?: string; // UI icon
   sortOrder: number;
+  hideFromCategoryPage?: boolean; // Hide from category management UI
+  allowSubcategories?: boolean; // Allow adding subcategories
 }
 
 export interface Underkategori extends Category {
@@ -272,6 +274,7 @@ function createDefaultInntekterCategory(): Hovedkategori {
     color: '#10b981',
     icon: '💰',
     sortOrder: 0,
+    allowSubcategories: true,
   };
 }
 
@@ -285,6 +288,7 @@ function createDefaultSparingCategory(): Hovedkategori {
     color: '#3b82f6',
     icon: '💎',
     sortOrder: 1,
+    allowSubcategories: true,
   };
 }
 
@@ -298,6 +302,8 @@ function createDefaultOverfortCategory(): Hovedkategori {
     color: '#8b5cf6',
     icon: '↔️',
     sortOrder: 2,
+    hideFromCategoryPage: true,
+    allowSubcategories: false,
   };
 }
 
@@ -410,6 +416,7 @@ export const useTransactionStore = create<TransactionStore>()(
           set(state => {
             const hovedkategori = state.hovedkategorier.get(hovedkategoriId);
             if (!hovedkategori) return;
+            if (hovedkategori.allowSubcategories === false) return;
             
             const underkategorier = new Map(state.underkategorier);
             const engineResult = engineCreateCategory(

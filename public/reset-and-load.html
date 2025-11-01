@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reset og Last Systemkategorier</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            max-width: 700px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f9fafb;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        h1 { color: #1f2937; margin-bottom: 10px; }
+        .info { color: #6b7280; margin-bottom: 30px; line-height: 1.6; }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            width: 100%;
+        }
+        button:hover { background: #2563eb; }
+        .success {
+            background: #10b981;
+            padding: 20px;
+            border-radius: 8px;
+            color: white;
+            margin-top: 20px;
+            display: none;
+        }
+        .details {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Reset og Last Systemkategorier</h1>
+        <p class="info">
+            Dette vil slette gammel localStorage-data og laste inn de nye systemkategoriene:<br><br>
+            💰 <strong>Inntekter</strong><br>
+            💎 <strong>Sparing</strong><br>
+            ↔️ <strong>Overført</strong>
+        </p>
+        
+        <button onclick="resetAndLoad()">Clear localStorage og Restart</button>
+        
+        <div id="success" class="success"></div>
+        <div id="details" class="details" style="display: none;"></div>
+    </div>
+
+    <script>
+        function resetAndLoad() {
+            try {
+                // Clear old data
+                localStorage.clear();
+                
+                // Show success
+                document.getElementById('success').style.display = 'block';
+                document.getElementById('success').innerHTML = 
+                    '✅ localStorage cleared!<br>Restarting med nye systemkategorier...';
+                
+                // Reload after short delay
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 1000);
+                
+            } catch (error) {
+                alert('❌ Feil: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>

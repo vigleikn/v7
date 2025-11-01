@@ -287,15 +287,17 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {/* Add subcategory button */}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => setShowNewSubcategory(true)}
-                    title="Legg til underkategori"
-                  >
-                    <span className="text-lg">+</span>
-                  </Button>
+                  {/* Add subcategory button (only if allowed) */}
+                  {hovedkategori.allowSubcategories !== false && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setShowNewSubcategory(true)}
+                      title="Legg til underkategori"
+                    >
+                      <span className="text-lg">+</span>
+                    </Button>
+                  )}
 
                   {/* Edit button (not for income category) */}
                   {!hovedkategori.isIncome && (
@@ -520,20 +522,22 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
 
           {/* Category Cards */}
           <div className="space-y-6">
-            {hovedkategorier.map((hovedkategori) => {
-              const details = getHovedkategoriWithUnderkategorier(hovedkategori.id);
-              const underkategorier = details?.underkategorier || [];
+            {hovedkategorier
+              .filter((hk) => !hk.hideFromCategoryPage)
+              .map((hovedkategori) => {
+                const details = getHovedkategoriWithUnderkategorier(hovedkategori.id);
+                const underkategorier = details?.underkategorier || [];
 
-              return (
-                <CategoryCard
-                  key={hovedkategori.id}
-                  hovedkategori={hovedkategori}
-                  underkategorier={underkategorier}
-                />
-              );
-            })}
+                return (
+                  <CategoryCard
+                    key={hovedkategori.id}
+                    hovedkategori={hovedkategori}
+                    underkategorier={underkategorier}
+                  />
+                );
+              })}
 
-            {hovedkategorier.length === 1 && (
+            {hovedkategorier.filter((hk) => !hk.hideFromCategoryPage).length === 1 && (
               <div className="text-center py-12 text-gray-500">
                 <p className="text-lg mb-2">Ingen egendefinerte kategorier ennå</p>
                 <p className="text-sm">
