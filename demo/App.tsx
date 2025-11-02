@@ -27,6 +27,9 @@ function App() {
   }, []);
 
   // Load sample transactions on mount if no data exists
+  // DISABLED: Auto-loading sample transactions
+  // Uncomment this useEffect if you want to load sample data on empty store
+  /*
   useEffect(() => {
     if (isInitialized && transactions.length === 0) {
       console.log('📝 No data found, loading sample transactions...');
@@ -154,6 +157,7 @@ function App() {
       console.log(`✓ Loaded ${sampleTransactions.length} sample transactions`);
     }
   }, [isInitialized, importTransactions, transactions.length]);
+  */
 
   const handleNavigate = (page: string) => {
     if (page === 'kategorier' || page === 'transaksjoner') {

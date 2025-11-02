@@ -1,5 +1,10 @@
 # Transaction Management System
 
+> **🤖 For AI/Cursor Context:**  
+> Personal finance tool for Norwegian bank CSV transactions. **Tech:** TypeScript, React, Zustand, Vite, Tailwind, shadcn/ui. **Core Pattern:** Pure functional category engine + Zustand store + persistent storage. **Critical:** System categories (isIncome: true) are protected, CSV imports ALL rows (duplicates checked only vs store), filters sync to store via useEffect. Transaction IDs generated from `date|amount|type|text|from|to`. Primary text color: #002050B.
+
+---
+
 A complete TypeScript system for parsing Norwegian bank transaction CSV files and automatically categorizing them using a rule-based engine.
 
 ## Features
@@ -112,17 +117,32 @@ Demonstrates:
 
 ```typescript
 import { parseCSVFile } from './csvParser';
+import { useTransactionStore } from './store';
+import { generateTransactionId } from './categoryEngine';
 
 const result = await parseCSVFile('./data/23421.csv');
 
 console.log(`Total transactions: ${result.originalCount}`);
-console.log(`Unique transactions: ${result.uniqueCount}`);
-console.log(`Duplicates removed: ${result.duplicates.length}`);
 
-// Access transactions
-result.transactions.forEach(transaction => {
-  console.log(`${transaction.dato}: ${transaction.tekst} - ${transaction.beløp} NOK`);
-});
+// Convert to categorized transactions
+const newTransactions = result.transactions.map(tx => ({
+  ...tx,
+  transactionId: generateTransactionId(tx),
+  categoryId: undefined,
+  isLocked: false,
+}));
+
+// Check for duplicates against store
+const store = useTransactionStore.getState();
+const existingIds = new Set(store.transactions.map(t => t.transactionId));
+const uniqueTransactions = newTransactions.filter(tx => !existingIds.has(tx.transactionId));
+const duplicates = newTransactions.length - uniqueTransactions.length;
+
+console.log(`New transactions: ${uniqueTransactions.length}`);
+console.log(`Duplicates (vs store): ${duplicates}`);
+
+// Import only unique transactions
+store.importTransactions([...store.transactions, ...uniqueTransactions]);
 ```
 
 ### Parse from String
@@ -196,7 +216,7 @@ Duplicates are detected by generating a unique hash for each transaction based o
 - From account (`fraKonto`)
 - To account (`tilKonto`)
 
-If a transaction has the same values for all these fields, it's considered a duplicate and added to the `duplicates` array instead of the main `transactions` array.
+**Important:** The CSV parser imports ALL rows from the file without internal duplicate checking. Duplicate detection only happens when importing to the Zustand store - transactions are compared against existing `store.transactions`. This allows legitimate duplicate transactions (e.g., two purchases at the same store on the same day) to be imported correctly.
 
 ### Category Engine Usage
 
