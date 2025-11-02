@@ -1,9 +1,10 @@
 /**
  * Zustand Store Index
- * Creates and exports the transaction store
+ * Creates and exports the transaction store with full middleware support
  */
 
 import { create } from 'zustand';
+import { devtools, persist } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 
@@ -28,31 +29,95 @@ import {
 export * from './state';
 
 // ============================================================================
+// Storage Helper (Node.js fallback)
+// ============================================================================
+
+// Custom storage for Node.js environment (fallback to in-memory)
+const createStorage = () => {
+  if (typeof globalThis !== 'undefined' && (globalThis as any).window?.localStorage) {
+    return (globalThis as any).window.localStorage;
+  }
+  // In-memory storage for Node.js
+  const storage = new Map<string, string>();
+  return {
+    getItem: (name: string) => storage.get(name) ?? null,
+    setItem: (name: string, value: string) => storage.set(name, value),
+    removeItem: (name: string) => storage.delete(name),
+  };
+};
+
+// ============================================================================
 // Create Store
 // ============================================================================
 
 export const useTransactionStore = create<TransactionStore>()(
-  immer((set, get) => ({
-    // Initial State
-    hovedkategorier: new Map([
-      ['cat_inntekter_default', createDefaultInntekterCategory()],
-      ['sparing', createDefaultSparingCategory()],
-      ['overfort', createDefaultOverfortCategory()],
-    ]),
-    underkategorier: new Map(),
-    transactions: [],
-    filteredTransactions: [],
-    rules: new Map(),
-    locks: new Map(),
-    filters: initialFilters,
-    selection: initialSelection,
-    isLoading: false,
-    error: null,
-    stats: initialStats,
-    
-    // Actions
-    ...createActions(set, get),
-  }))
+  devtools(
+    persist(
+      immer((set, get) => ({
+        // Initial State
+        hovedkategorier: new Map([
+          ['cat_inntekter_default', createDefaultInntekterCategory()],
+          ['sparing', createDefaultSparingCategory()],
+          ['overfort', createDefaultOverfortCategory()],
+        ]),
+        underkategorier: new Map(),
+        transactions: [],
+        filteredTransactions: [],
+        rules: new Map(),
+        locks: new Map(),
+        filters: initialFilters,
+        selection: initialSelection,
+        isLoading: false,
+        error: null,
+        stats: initialStats,
+        
+        // Actions
+        ...createActions(set, get),
+      })),
+      {
+        name: 'transaction-store',
+        storage: {
+          getItem: (name) => {
+            const str = createStorage().getItem(name);
+            if (!str) return null;
+            
+            const parsed = JSON.parse(str);
+            
+            // Reconstruct Maps from arrays
+            if (parsed.state) {
+              if (parsed.state.hovedkategorier && Array.isArray(parsed.state.hovedkategorier)) {
+                parsed.state.hovedkategorier = new Map(parsed.state.hovedkategorier);
+              }
+              if (parsed.state.underkategorier && Array.isArray(parsed.state.underkategorier)) {
+                parsed.state.underkategorier = new Map(parsed.state.underkategorier);
+              }
+              if (parsed.state.rules && Array.isArray(parsed.state.rules)) {
+                parsed.state.rules = new Map(parsed.state.rules);
+              }
+              if (parsed.state.locks && Array.isArray(parsed.state.locks)) {
+                parsed.state.locks = new Map(parsed.state.locks);
+              }
+            }
+            
+            return parsed;
+          },
+          setItem: (name, value) => {
+            createStorage().setItem(name, JSON.stringify(value));
+          },
+          removeItem: (name) => {
+            createStorage().removeItem(name);
+          },
+        },
+        partialize: (state) => ({
+          hovedkategorier: Array.from(state.hovedkategorier.entries()),
+          underkategorier: Array.from(state.underkategorier.entries()),
+          rules: Array.from(state.rules.entries()),
+          locks: Array.from(state.locks.entries()),
+        }),
+      }
+    ),
+    { name: 'TransactionStore' }
+  )
 );
 
 // ============================================================================
