@@ -128,6 +128,7 @@ interface TransactionStoreActions {
   
   // Category Management - Underkategorier
   createUnderkategori: (name: string, hovedkategoriId: string) => void;
+  addSubcategoriesBulk: (hovedkategoriId: string, names: string[]) => void;
   updateUnderkategori: (id: string, updates: Partial<Underkategori>) => void;
   deleteUnderkategori: (id: string) => void;
   moveUnderkategori: (underkategoriId: string, newHovedkategoriId: string) => void;
@@ -313,8 +314,8 @@ function createDefaultOverfortCategory(): Hovedkategori {
 
 // Custom storage for Node.js environment (fallback to in-memory)
 const createStorage = () => {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
+  if (typeof globalThis !== 'undefined' && (globalThis as any).window?.localStorage) {
+    return (globalThis as any).window.localStorage;
   }
   // In-memory storage for Node.js
   const storage = new Map<string, string>();
@@ -438,6 +439,64 @@ export const useTransactionStore = create<TransactionStore>()(
             state.hovedkategorier.get(hovedkategoriId)!.underkategorier.push(
               underkategori.id
             );
+          });
+        },
+        
+        addSubcategoriesBulk: (hovedkategoriId, names) => {
+          set(state => {
+            const hovedkategori = state.hovedkategorier.get(hovedkategoriId);
+            if (!hovedkategori) return;
+            if (hovedkategori.allowSubcategories === false) return;
+            
+            // Get existing subcategory names (case-insensitive)
+            const existingNames = new Set(
+              Array.from(state.underkategorier.values())
+                .filter(sub => sub.hovedkategoriId === hovedkategoriId)
+                .map(sub => sub.name.toLowerCase())
+            );
+            
+            // Filter and deduplicate names
+            const validNames: string[] = [];
+            const seen = new Set<string>();
+            
+            names.forEach(name => {
+              const trimmed = name.trim();
+              
+              // Skip empty or whitespace-only
+              if (!trimmed) return;
+              
+              const lowerName = trimmed.toLowerCase();
+              
+              // Skip if already exists or is duplicate in input
+              if (existingNames.has(lowerName) || seen.has(lowerName)) return;
+              
+              seen.add(lowerName);
+              validNames.push(trimmed);
+            });
+            
+            // Create all valid subcategories
+            validNames.forEach((name, index) => {
+              const underkategorier = new Map(state.underkategorier);
+              const engineResult = engineCreateCategory(
+                underkategorier as any,
+                {
+                  name,
+                  parentId: hovedkategoriId,
+                }
+              );
+              
+              const underkategori: Underkategori = {
+                ...engineResult.category,
+                type: 'underkategori',
+                hovedkategoriId,
+                sortOrder: hovedkategori.underkategorier.length + index,
+              };
+              
+              state.underkategorier.set(underkategori.id, underkategori);
+              state.hovedkategorier.get(hovedkategoriId)!.underkategorier.push(
+                underkategori.id
+              );
+            });
           });
         },
         

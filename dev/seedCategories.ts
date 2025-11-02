@@ -1,51 +1,18 @@
 /**
  * Seed Categories Script
- * Programmatisk opprettelse av hovedkategorier og underkategorier
+ * Programmatically creates hovedkategorier and underkategorier
+ * using existing Zustand store actions, then saves to persistent storage
  */
 
 import { useTransactionStore } from '../store';
-import { saveStoreState } from '../services/storeIntegration';
-import PersistenceService from '../services/persistence';
+import { saveAll } from '../services/persistence';
 
-console.log('='.repeat(80));
-console.log('OPPRETT KATEGORIER PROGRAMMATISK');
-console.log('='.repeat(80));
-console.log();
+// ============================================================================
+// Category Data
+// ============================================================================
 
-async function seedCategories() {
-  const store = useTransactionStore.getState();
-
-  // Initialize persistence
-  await PersistenceService.init();
-
-  console.log('📁 Starter opprettelse av kategorier...');
-  console.log();
-
-  // ============================================================================
-  // HOVEDKATEGORI 1: FORUTSIGBARE UTGIFTER
-  // ============================================================================
-
-  console.log('📂 Oppretter: FORUTSIGBARE UTGIFTER');
-
-  store.createHovedkategori('Forutsigbare utgifter', {
-    color: '#ef4444',
-    icon: '📅',
-    isIncome: false,
-  });
-
-  let currentState = useTransactionStore.getState();
-  const forutsigbareUtgifter = Array.from(currentState.hovedkategorier.values()).find(
-    k => k.name === 'Forutsigbare utgifter'
-  );
-
-  if (!forutsigbareUtgifter) {
-    throw new Error('Forutsigbare utgifter ikke opprettet');
-  }
-
-  console.log(`✓ Hovedkategori opprettet: Forutsigbare utgifter (ID: ${forutsigbareUtgifter.id})`);
-
-  // Underkategorier
-  const forutsigbareUnderkategorier = [
+const CATEGORIES = {
+  'FORUTSIGBARE UTGIFTER': [
     'Kommunalt',
     'Nett og tlf',
     'Streaming abo.',
@@ -56,40 +23,9 @@ async function seedCategories() {
     'Veldedighet',
     'Husleie',
     'Forsikring',
-  ];
-
-  for (const navn of forutsigbareUnderkategorier) {
-    store.createUnderkategori(navn, forutsigbareUtgifter.id);
-    console.log(`  └─ ${navn}`);
-  }
-
-  console.log();
-
-  // ============================================================================
-  // HOVEDKATEGORI 2: UFORUTSIGBARE UTGIFTER
-  // ============================================================================
-
-  console.log('📂 Oppretter: UFORUTSIGBARE UTGIFTER');
-
-  store.createHovedkategori('Uforutsigbare utgifter', {
-    color: '#f59e0b',
-    icon: '❓',
-    isIncome: false,
-  });
-
-  currentState = useTransactionStore.getState();
-  const uforutsigbareUtgifter = Array.from(currentState.hovedkategorier.values()).find(
-    k => k.name === 'Uforutsigbare utgifter'
-  );
-
-  if (!uforutsigbareUtgifter) {
-    throw new Error('Uforutsigbare utgifter ikke opprettet');
-  }
-
-  console.log(`✓ Hovedkategori opprettet: Uforutsigbare utgifter (ID: ${uforutsigbareUtgifter.id})`);
-
-  // Underkategorier
-  const uforutsigbareUnderkategorier = [
+    'Fellesutgifter',
+  ],
+  'UFORUTSIGBARE UTGIFTER': [
     'Elektronikk',
     'Familieaktiviteter',
     'Ferie',
@@ -99,40 +35,8 @@ async function seedCategories() {
     'Planter',
     'Utstyr',
     'Velvære',
-  ];
-
-  for (const navn of uforutsigbareUnderkategorier) {
-    store.createUnderkategori(navn, uforutsigbareUtgifter.id);
-    console.log(`  └─ ${navn}`);
-  }
-
-  console.log();
-
-  // ============================================================================
-  // HOVEDKATEGORI 3: LIVSOPPHOLD
-  // ============================================================================
-
-  console.log('📂 Oppretter: LIVSOPPHOLD');
-
-  store.createHovedkategori('Livsopphold', {
-    color: '#10b981',
-    icon: '🛒',
-    isIncome: false,
-  });
-
-  currentState = useTransactionStore.getState();
-  const livsopphold = Array.from(currentState.hovedkategorier.values()).find(
-    k => k.name === 'Livsopphold'
-  );
-
-  if (!livsopphold) {
-    throw new Error('Livsopphold ikke opprettet');
-  }
-
-  console.log(`✓ Hovedkategori opprettet: Livsopphold (ID: ${livsopphold.id})`);
-
-  // Underkategorier
-  const livsoppholdUnderkategorier = [
+  ],
+  'LIVSOPPHOLD': [
     'Bil',
     'Dagligvarer',
     'Helse',
@@ -140,126 +44,154 @@ async function seedCategories() {
     'Mat ute',
     'Skole',
     'Sykkel',
-  ];
+  ],
+};
 
-  for (const navn of livsoppholdUnderkategorier) {
-    store.createUnderkategori(navn, livsopphold.id);
-    console.log(`  └─ ${navn}`);
-  }
+const INNTEKTER_SUBCATEGORIES = [
+  'Andre inntekter',
+  'Torghatten',
+  'UDI',
+];
 
-  console.log();
+// ============================================================================
+// Main Function
+// ============================================================================
 
-  // ============================================================================
-  // SYSTEM-KATEGORI: INNTEKTER (legge til underkategorier)
-  // ============================================================================
+async function seedCategories() {
+  console.log('🌱 Starting category seeding...\n');
 
-  console.log('📂 Legger til underkategorier i INNTEKTER (systemkategori)');
+  const store = useTransactionStore.getState();
+  
+  // Track created categories
+  const createdHovedkategorier: string[] = [];
+  const createdUnderkategorier: string[] = [];
 
-  currentState = useTransactionStore.getState();
-  const inntekterKategori = Array.from(currentState.hovedkategorier.values()).find(
-    k => k.name === 'Inntekter' && k.isIncome === true
-  );
+  // ========================================================================
+  // Step 1: Create hovedkategorier with their underkategorier
+  // ========================================================================
 
-  if (!inntekterKategori) {
-    throw new Error('Inntekter systemkategori ikke funnet');
-  }
-
-  console.log(`✓ Fant systemkategori: Inntekter (ID: ${inntekterKategori.id})`);
-
-  // Underkategorier for Inntekter
-  const inntekterUnderkategorier = [
-    'Andre inntekter',
-    'Torghatten',
-    'UDI',
-  ];
-
-  for (const navn of inntekterUnderkategorier) {
-    store.createUnderkategori(navn, inntekterKategori.id);
-    console.log(`  └─ ${navn}`);
-  }
-
-  console.log();
-
-  // ============================================================================
-  // LAGRE TIL PERSISTENT LAGRING
-  // ============================================================================
-
-  console.log('💾 Lagrer kategorier til persistent lagring...');
-  console.log();
-
-  currentState = useTransactionStore.getState();
-
-  console.log('Lagrer:');
-  console.log(`  - ${currentState.hovedkategorier.size} hovedkategorier`);
-  console.log(`  - ${currentState.underkategorier.size} underkategorier`);
-  console.log();
-
-  await saveStoreState();
-
-  console.log('✓ Kategorier lagret til persistent lagring');
-  console.log();
-
-  // ============================================================================
-  // OPPSUMMERING
-  // ============================================================================
-
-  console.log('='.repeat(80));
-  console.log('📋 OPPSUMMERING');
-  console.log('='.repeat(80));
-  console.log();
-
-  currentState = useTransactionStore.getState();
-
-  console.log('✅ Kategorier opprettet og lagret:');
-  console.log();
-
-  // List all hovedkategorier with their underkategorier
-  const hovedkategorier = Array.from(currentState.hovedkategorier.values())
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
-  for (const hk of hovedkategorier) {
-    const isSystem = hk.isIncome ? ' [SYSTEM]' : '';
-    console.log(`${hk.icon || '📁'} ${hk.name}${isSystem}`);
-
-    const details = currentState.getHovedkategoriWithUnderkategorier(hk.id);
-    if (details && details.underkategorier.length > 0) {
-      details.underkategorier.forEach(uk => {
-        console.log(`  └─ ${uk.name}`);
-      });
+  console.log('📁 Creating hovedkategorier and underkategorier...');
+  
+  for (const [hovedkategoriName, underkategorier] of Object.entries(CATEGORIES)) {
+    console.log(`\n  Creating: ${hovedkategoriName}`);
+    
+    // Create hovedkategori
+    store.createHovedkategori(hovedkategoriName);
+    createdHovedkategorier.push(hovedkategoriName);
+    
+    // Get the created hovedkategori ID
+    const currentState = useTransactionStore.getState();
+    const hovedkategori = Array.from(currentState.hovedkategorier.values())
+      .find(cat => cat.name === hovedkategoriName);
+    
+    if (!hovedkategori) {
+      console.error(`  ❌ Failed to create hovedkategori: ${hovedkategoriName}`);
+      continue;
     }
-    console.log();
+    
+    console.log(`  ✅ Created hovedkategori (ID: ${hovedkategori.id})`);
+    
+    // Create underkategorier
+    for (const underkategoriName of underkategorier) {
+      store.createUnderkategori(underkategoriName, hovedkategori.id);
+      createdUnderkategorier.push(underkategoriName);
+      console.log(`     ↳ ${underkategoriName}`);
+    }
   }
 
-  console.log('📊 Statistikk:');
-  console.log(`  Hovedkategorier: ${currentState.hovedkategorier.size}`);
-  console.log(`  Underkategorier: ${currentState.underkategorier.size}`);
-  console.log(`  Totalt kategorier: ${currentState.hovedkategorier.size + currentState.underkategorier.size}`);
-  console.log();
+  // ========================================================================
+  // Step 2: Add underkategorier to "Inntekter" system category
+  // ========================================================================
 
-  console.log('Fordeling:');
-  const forutsigbare = currentState.getHovedkategoriWithUnderkategorier(forutsigbareUtgifter.id);
-  const uforutsigbare = currentState.getHovedkategoriWithUnderkategorier(uforutsigbareUtgifter.id);
-  const livsoppholdDetails = currentState.getHovedkategoriWithUnderkategorier(livsopphold.id);
-  const inntekterDetails = currentState.getHovedkategoriWithUnderkategorier(inntekterKategori.id);
+  console.log('\n💰 Adding underkategorier to "Inntekter"...');
+  
+  const currentState = useTransactionStore.getState();
+  const inntekterCategory = currentState.hovedkategorier.get('cat_inntekter_default');
+  
+  if (inntekterCategory) {
+    for (const underkategoriName of INNTEKTER_SUBCATEGORIES) {
+      store.createUnderkategori(underkategoriName, inntekterCategory.id);
+      createdUnderkategorier.push(underkategoriName);
+      console.log(`  ↳ ${underkategoriName}`);
+    }
+  } else {
+    console.error('  ❌ Could not find "Inntekter" category');
+  }
 
-  console.log(`  Forutsigbare utgifter: ${forutsigbare?.underkategorier.length || 0} underkategorier`);
-  console.log(`  Uforutsigbare utgifter: ${uforutsigbare?.underkategorier.length || 0} underkategorier`);
-  console.log(`  Livsopphold: ${livsoppholdDetails?.underkategorier.length || 0} underkategorier`);
-  console.log(`  Inntekter: ${inntekterDetails?.underkategorier.length || 0} underkategorier`);
-  console.log();
+  // ========================================================================
+  // Step 3: Save to persistent storage
+  // ========================================================================
 
-  console.log('💾 Lagret til:');
-  console.log(`  ${process.cwd()}/data/persistent/`);
-  console.log();
+  console.log('\n💾 Saving to persistent storage...');
+  
+  try {
+    const finalState = useTransactionStore.getState();
+    
+    await saveAll({
+      transactions: finalState.transactions,
+      hovedkategorier: finalState.hovedkategorier,
+      underkategorier: finalState.underkategorier,
+      rules: finalState.rules,
+      locks: finalState.locks,
+    });
+    
+    console.log('✅ Successfully saved to data/persistent/');
+  } catch (error) {
+    console.error('❌ Failed to save:', error);
+    throw error;
+  }
 
-  console.log('🎉 Ferdig! Kategorier er klare til bruk.');
-  console.log('='.repeat(80));
-  console.log();
+  // ========================================================================
+  // Step 4: Summary
+  // ========================================================================
+
+  console.log('\n📊 Summary:');
+  console.log(`  Hovedkategorier created: ${createdHovedkategorier.length}`);
+  console.log(`  Underkategorier created: ${createdUnderkategorier.length}`);
+  
+  const finalState = useTransactionStore.getState();
+  console.log(`\n  Total hovedkategorier in store: ${finalState.hovedkategorier.size}`);
+  console.log(`  Total underkategorier in store: ${finalState.underkategorier.size}`);
+  
+  console.log('\n✨ Category seeding complete!\n');
+
+  // ========================================================================
+  // Step 5: Display all categories
+  // ========================================================================
+
+  console.log('📋 All categories in store:\n');
+  
+  Array.from(finalState.hovedkategorier.values())
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .forEach(hovedkat => {
+      const isIncome = hovedkat.isIncome ? ' [Income]' : '';
+      const hideFromUI = hovedkat.hideFromCategoryPage ? ' [Hidden from UI]' : '';
+      console.log(`  ${hovedkat.icon || '📁'} ${hovedkat.name}${isIncome}${hideFromUI}`);
+      
+      const subkategorier = hovedkat.underkategorier
+        .map(subId => finalState.underkategorier.get(subId))
+        .filter(Boolean);
+      
+      subkategorier.forEach(sub => {
+        console.log(`     ↳ ${sub!.name}`);
+      });
+      
+      if (subkategorier.length === 0) {
+        console.log(`     (no subcategories)`);
+      }
+    });
 }
 
-// Run the seed script
-seedCategories().catch(error => {
-  console.error('❌ Feil ved opprettelse av kategorier:', error);
-  process.exit(1);
-});
+// ============================================================================
+// Run
+// ============================================================================
 
+seedCategories()
+  .then(() => {
+    console.log('✅ Done!');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('❌ Error:', error);
+    process.exit(1);
+  });

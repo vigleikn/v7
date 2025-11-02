@@ -22,9 +22,7 @@ export interface Transaction {
 
 export interface ParseResult {
   transactions: Transaction[];
-  duplicates: Transaction[];
   originalCount: number;
-  uniqueCount: number;
 }
 
 /**
@@ -83,8 +81,6 @@ export function parseCSV(csvContent: string): ParseResult {
   };
 
   const allTransactions: Transaction[] = [];
-  const duplicates: Transaction[] = [];
-  const seenHashes = new Set<string>();
 
   // Parse data rows (skip header)
   for (let i = 1; i < lines.length; i++) {
@@ -119,21 +115,13 @@ export function parseCSV(csvContent: string): ParseResult {
       transaction.hovedkategori = columns[indices.hovedkategori]?.trim() || '';
     }
 
-    // Check for duplicates
-    const hash = generateTransactionHash(transaction);
-    if (seenHashes.has(hash)) {
-      duplicates.push(transaction);
-    } else {
-      seenHashes.add(hash);
-      allTransactions.push(transaction);
-    }
+    // Add all transactions from CSV (no internal duplicate checking)
+    allTransactions.push(transaction);
   }
 
   return {
     transactions: allTransactions,
-    duplicates,
-    originalCount: allTransactions.length + duplicates.length,
-    uniqueCount: allTransactions.length,
+    originalCount: allTransactions.length,
   };
 }
 

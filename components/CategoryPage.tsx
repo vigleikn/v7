@@ -10,6 +10,7 @@ import { Sidebar } from './Sidebar';
 import { Card, CardHeader, CardContent } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { Textarea } from './ui/textarea';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -78,6 +79,169 @@ const NewSubcategoryInput: React.FC<NewSubcategoryInputProps> = ({
       >
         Avbryt
       </Button>
+    </div>
+  );
+};
+
+// ============================================================================
+// Bulk Add Subcategories Component
+// ============================================================================
+
+interface BulkAddSubcategoriesProps {
+  hovedkategoriId: string;
+  existingSubcategories: Underkategori[];
+  onCancel: () => void;
+  onSave: (names: string[]) => void;
+}
+
+const BulkAddSubcategories: React.FC<BulkAddSubcategoriesProps> = ({
+  hovedkategoriId,
+  existingSubcategories,
+  onCancel,
+  onSave,
+}) => {
+  const [text, setText] = useState('');
+  const [feedback, setFeedback] = useState<{ valid: number; duplicates: number; empty: number } | null>(null);
+
+  const parseLines = (input: string) => {
+    const lines = input.split('\n').map(line => line.trim());
+    const existing = new Set(existingSubcategories.map(sub => sub.name.toLowerCase()));
+    
+    const valid: string[] = [];
+    const seen = new Set<string>();
+    let duplicates = 0;
+    let empty = 0;
+
+    lines.forEach(line => {
+      if (!line) {
+        empty++;
+        return;
+      }
+
+      const lowerLine = line.toLowerCase();
+      
+      // Check if already exists or is duplicate in current input
+      if (existing.has(lowerLine) || seen.has(lowerLine)) {
+        duplicates++;
+        return;
+      }
+
+      seen.add(lowerLine);
+      valid.push(line);
+    });
+
+    return { valid, duplicates, empty };
+  };
+
+  const handleSave = () => {
+    const result = parseLines(text);
+    if (result.valid.length > 0) {
+      onSave(result.valid);
+      setText('');
+      setFeedback(null);
+    }
+  };
+
+  const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const newText = e.target.value;
+    setText(newText);
+    
+    // Show live feedback
+    if (newText.trim()) {
+      const result = parseLines(newText);
+      setFeedback({
+        valid: result.valid.length,
+        duplicates: result.duplicates,
+        empty: result.empty,
+      });
+    } else {
+      setFeedback(null);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Esc = Cancel
+    if (e.key === 'Escape') {
+      onCancel();
+      return;
+    }
+    
+    // Ctrl+Enter or Cmd+Enter = Save
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      handleSave();
+    }
+  };
+
+  return (
+    <div className="p-4 bg-blue-50 border border-blue-200 rounded-md space-y-3">
+      <div className="flex items-center justify-between">
+        <h4 className="font-medium text-sm text-blue-900">
+          📝 Legg til flere underkategorier
+        </h4>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          className="h-6 w-6 p-0 text-blue-700 hover:text-blue-900"
+        >
+          ✕
+        </Button>
+      </div>
+
+      <Textarea
+        placeholder="Skriv inn underkategorier, én per linje...&#10;&#10;Eksempel:&#10;Dagligvarer&#10;Mat ute&#10;Klær"
+        value={text}
+        onChange={handleTextChange}
+        onKeyDown={handleKeyDown}
+        autoFocus
+        className="min-h-[120px] font-mono text-sm"
+      />
+
+      {/* Live feedback */}
+      {feedback && (
+        <div className="text-xs space-y-1 text-gray-700">
+          <div className="flex items-center gap-2">
+            <span className="text-green-600">✓ {feedback.valid} vil bli opprettet</span>
+          </div>
+          {feedback.duplicates > 0 && (
+            <div className="text-orange-600">
+              ⚠ {feedback.duplicates} duplikat(er) vil bli ignorert
+            </div>
+          )}
+          {feedback.empty > 0 && (
+            <div className="text-gray-500">
+              · {feedback.empty} tomme linje(r)
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-gray-600">
+          <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs">Esc</kbd> avbryt
+          {' · '}
+          <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs">Ctrl</kbd>+
+          <kbd className="px-1.5 py-0.5 bg-white border rounded text-xs">Enter</kbd> lagre
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onCancel}
+          >
+            Avbryt
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!feedback || feedback.valid === 0}
+          >
+            Lagre {feedback && feedback.valid > 0 ? `(${feedback.valid})` : ''}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 };
@@ -209,6 +373,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   underkategorier,
 }) => {
   const [showNewSubcategory, setShowNewSubcategory] = useState(false);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingSubcategoryId, setEditingSubcategoryId] = useState<string | null>(null);
@@ -231,6 +396,13 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   const handleAddSubcategory = (name: string) => {
     createUnderkategori(name, hovedkategori.id);
     setShowNewSubcategory(false);
+  };
+
+  const handleBulkAddSubcategories = (names: string[]) => {
+    // Use the optimized bulk add function
+    const addSubcategoriesBulk = useTransactionStore.getState().addSubcategoriesBulk;
+    addSubcategoriesBulk(hovedkategori.id, names);
+    setShowBulkAdd(false);
   };
 
   const handleUpdateHovedkategori = (name: string) => {
@@ -289,14 +461,26 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
                 <div className="flex items-center gap-2">
                   {/* Add subcategory button (only if allowed) */}
                   {hovedkategori.allowSubcategories !== false && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setShowNewSubcategory(true)}
-                      title="Legg til underkategori"
-                    >
-                      <span className="text-lg">+</span>
-                    </Button>
+                    <>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => setShowNewSubcategory(true)}
+                        title="Legg til én underkategori"
+                      >
+                        <span className="text-lg">+</span>
+                      </Button>
+                      
+                      {/* Bulk add button */}
+                      <button
+                        onClick={() => setShowBulkAdd(!showBulkAdd)}
+                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 transition-colors"
+                        title="Legg til flere underkategorier samtidig"
+                      >
+                        <span className="text-base">📝</span>
+                        <span className="hidden sm:inline">Legg til flere</span>
+                      </button>
+                    </>
                   )}
 
                   {/* Edit button (not for income category) */}
@@ -329,8 +513,20 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
         </CardHeader>
 
         <CardContent>
+          {/* Bulk add subcategories */}
+          {showBulkAdd && (
+            <div className="mb-4">
+              <BulkAddSubcategories
+                hovedkategoriId={hovedkategori.id}
+                existingSubcategories={underkategorier}
+                onCancel={() => setShowBulkAdd(false)}
+                onSave={handleBulkAddSubcategories}
+              />
+            </div>
+          )}
+
           {/* New subcategory input */}
-          {showNewSubcategory && (
+          {showNewSubcategory && !showBulkAdd && (
             <div className="mb-4">
               <NewSubcategoryInput
                 hovedkategoriId={hovedkategori.id}

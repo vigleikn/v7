@@ -402,45 +402,28 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
   const bulkCategorize = useTransactionStore((state) => state.bulkCategorize);
   const setFilters = useTransactionStore((state) => state.setFilters);
 
-  // Apply filters locally
-  const filteredTransactions = useMemo(() => {
-    let result = [...transactions];
+  // Sync filters to store whenever they change
+  React.useEffect(() => {
+    const categoryIds = categoryValue === '__uncategorized' 
+      ? [] 
+      : categoryValue 
+      ? [categoryValue] 
+      : [];
+    
+    const types = typeValue ? [typeValue] : [];
+    
+    setFilters({
+      search: searchValue,
+      dateFrom: dateFromValue || undefined,
+      dateTo: dateToValue || undefined,
+      categoryIds,
+      types,
+      showOnlyUncategorized: categoryValue === '__uncategorized',
+    });
+  }, [searchValue, dateFromValue, dateToValue, typeValue, categoryValue, setFilters]);
 
-    // Search filter
-    if (searchValue) {
-      const searchLower = searchValue.toLowerCase();
-      result = result.filter(
-        (tx) =>
-          tx.tekst.toLowerCase().includes(searchLower) ||
-          tx.fraKonto.toLowerCase().includes(searchLower) ||
-          tx.tilKonto.toLowerCase().includes(searchLower)
-      );
-    }
-
-    // Date filters
-    if (dateFromValue) {
-      result = result.filter((tx) => tx.dato >= dateFromValue);
-    }
-    if (dateToValue) {
-      result = result.filter((tx) => tx.dato <= dateToValue);
-    }
-
-    // Type filter
-    if (typeValue) {
-      result = result.filter((tx) => tx.type === typeValue);
-    }
-
-    // Category filter
-    if (categoryValue) {
-      if (categoryValue === '__uncategorized') {
-        result = result.filter((tx) => !tx.categoryId);
-      } else {
-        result = result.filter((tx) => tx.categoryId === categoryValue);
-      }
-    }
-
-    return result;
-  }, [transactions, searchValue, dateFromValue, dateToValue, typeValue, categoryValue]);
+  // Use filtered transactions from store (already filtered)
+  const filteredTransactions = useTransactionStore(selectFilteredTransactions);
 
   const handleClearFilters = () => {
     setSearchValue('');
@@ -499,10 +482,10 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
       // Read file content
       const fileContent = await file.text();
 
-      // Parse CSV
+      // Parse CSV (all rows, no internal duplicate checking)
       const parseResult = parseCSV(fileContent);
 
-      console.log(`📄 CSV parsed: ${parseResult.originalCount} total, ${parseResult.duplicates.length} duplicates`);
+      console.log(`📄 CSV parsed: ${parseResult.originalCount} transaksjoner`);
 
       // Convert to categorized transactions
       const newTransactions = parseResult.transactions.map((tx) => ({
@@ -512,15 +495,28 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
         isLocked: false,
       }));
 
-      // Check for duplicates against existing transactions
+      // Check for duplicates against existing transactions in store
       const existingIds = new Set(transactions.map((t) => t.transactionId));
+      const duplicateTransactions = newTransactions.filter(
+        (tx) => existingIds.has(tx.transactionId)
+      );
       const uniqueNewTransactions = newTransactions.filter(
         (tx) => !existingIds.has(tx.transactionId)
       );
 
-      const duplicatesWithExisting = newTransactions.length - uniqueNewTransactions.length;
+      const duplicatesCount = duplicateTransactions.length;
 
-      console.log(`🔍 Duplicate check: ${duplicatesWithExisting} duplicates with existing data`);
+      console.log(`🔍 Duplicate check: ${duplicatesCount} duplikater mot eksisterende data`);
+      
+      // Log duplicates if any
+      if (duplicatesCount > 0) {
+        console.log(`⛔ Duplikater funnet (vises ikke de ${Math.min(10, duplicatesCount)} første):`);
+        duplicateTransactions.slice(0, 10).forEach((dup, i) => {
+          const beløp = Math.round(dup.beløp);
+          const arrow = dup.beløp < 0 ? '→' : '←';
+          console.log(`   ${i + 1}. [${dup.dato}] ${beløp} kr • ${dup.tekst} • ${dup.fraKontonummer || 'N/A'} ${arrow} ${dup.tilKontonummer || 'N/A'}`);
+        });
+      }
 
       if (uniqueNewTransactions.length === 0) {
         setImportStatus('Ingen nye transaksjoner å importere (alle er duplikater)');
@@ -549,13 +545,13 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
       saveToBrowser();
 
       // Show success message
-      const message = `✅ Importert ${uniqueNewTransactions.length} nye transaksjoner • ${autoCategorized} auto-kategorisert • ${parseResult.duplicates.length + duplicatesWithExisting} duplikater fjernet`;
+      const message = `✅ Importert ${uniqueNewTransactions.length} nye transaksjoner • ${autoCategorized} auto-kategorisert • ${duplicatesCount} duplikater ignorert`;
       setImportStatus(message);
 
       console.log('✅ Import fullført:');
       console.log(`   Nye transaksjoner: ${uniqueNewTransactions.length}`);
       console.log(`   Auto-kategorisert: ${autoCategorized}`);
-      console.log(`   Duplikater fjernet: ${parseResult.duplicates.length + duplicatesWithExisting}`);
+      console.log(`   Duplikater ignorert: ${duplicatesCount}`);
     } catch (error) {
       console.error('Import feilet:', error);
       setImportStatus(`❌ Feil ved import: ${error instanceof Error ? error.message : 'Ukjent feil'}`);

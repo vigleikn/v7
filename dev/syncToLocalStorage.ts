@@ -1,169 +1,271 @@
 /**
- * Sync categories from persistent files to localStorage format
- * Creates a localStorage-compatible JSON file that browser can load
+ * Sync Categories to Browser localStorage Format
+ * Loads categories from persistent storage and saves them in the format
+ * that the browser application expects (localStorage compatible)
  */
 
-import { loadHovedkategorier, loadUnderkategorier, loadRules, loadLocks, loadTransactions } from '../services/persistence';
-import { promises as fs } from 'fs';
+import { loadAll } from '../services/persistence';
+import { writeFile } from 'fs/promises';
 import { join } from 'path';
 
 async function syncToLocalStorage() {
-  console.log('='.repeat(80));
-  console.log('SYNKRONISER FILER → LOCALSTORAGE FORMAT');
-  console.log('='.repeat(80));
-  console.log();
+  console.log('🔄 Syncing categories to localStorage format...\n');
 
-  console.log('📂 Laster data fra persistent lagring...');
-  console.log();
+  // Load from Node.js persistent storage
+  const data = await loadAll();
 
-  const [hovedkategorier, underkategorier, rules, locks, transactions] = await Promise.all([
-    loadHovedkategorier(),
-    loadUnderkategorier(),
-    loadRules(),
-    loadLocks(),
-    loadTransactions(),
-  ]);
-
-  console.log('✓ Lastet:');
-  console.log(`  - ${hovedkategorier.size} hovedkategorier`);
-  console.log(`  - ${underkategorier.size} underkategorier`);
-  console.log(`  - ${rules.size} regler`);
-  console.log(`  - ${locks.size} låste transaksjoner`);
-  console.log(`  - ${transactions.length} transaksjoner`);
-  console.log();
+  console.log('📦 Loaded from persistent storage:');
+  console.log(`  - Hovedkategorier: ${data.hovedkategorier.length}`);
+  console.log(`  - Underkategorier: ${data.underkategorier.length}`);
+  console.log(`  - Transactions: ${data.transactions.length}\n`);
 
   // Create localStorage-compatible format
   const localStorageData = {
-    version: '1.0.0',
-    lastSaved: new Date().toISOString(),
-    transactions,
-    hovedkategorier: Array.from(hovedkategorier.entries()),
-    underkategorier: Array.from(underkategorier.entries()),
-    rules: Array.from(rules.entries()),
-    locks: Array.from(locks.entries()),
+    state: {
+      hovedkategorier: data.hovedkategorier,
+      underkategorier: data.underkategorier,
+      transactions: data.transactions,
+      rules: data.rules,
+      locks: data.locks,
+      filters: {
+        search: '',
+        categoryIds: [],
+        types: [],
+        showOnlyUncategorized: false,
+        showOnlyLocked: false,
+      },
+      selection: {
+        selectedIds: [],
+        isAllSelected: false,
+        selectionMode: 'none',
+      },
+      isLoading: false,
+      error: null,
+      stats: {
+        total: 0,
+        categorized: 0,
+        uncategorized: 0,
+        locked: 0,
+        uniqueTekstPatterns: 0,
+        patternsWithRules: 0,
+      },
+    },
+    version: 0,
   };
 
-  // Save to a file that can be loaded in browser
+  // Save to public directory for easy browser access
   const outputPath = join(process.cwd(), 'public', 'initial-data.json');
-  
-  // Create public directory if it doesn't exist
-  await fs.mkdir(join(process.cwd(), 'public'), { recursive: true });
-  
-  await fs.writeFile(outputPath, JSON.stringify(localStorageData, null, 2), 'utf-8');
+  await writeFile(outputPath, JSON.stringify(localStorageData, null, 2));
 
-  console.log('✓ Opprettet localStorage-kompatibel fil:');
-  console.log(`  ${outputPath}`);
-  console.log();
+  console.log(`✅ Saved to: ${outputPath}`);
+  console.log('\n📋 Instructions for browser:');
+  console.log('  1. Start the dev server: npm run dev');
+  console.log('  2. Open browser console at http://localhost:3000');
+  console.log('  3. Run this command:\n');
+  console.log('     fetch("/initial-data.json")');
+  console.log('       .then(r => r.json())');
+  console.log('       .then(data => {');
+  console.log('         localStorage.setItem("transaction-store", JSON.stringify(data));');
+  console.log('         location.reload();');
+  console.log('       });\n');
+  console.log('  Or use the load-categories.html helper page!\n');
 
-  console.log('📋 Innhold:');
-  console.log(`  version: ${localStorageData.version}`);
-  console.log(`  hovedkategorier: ${localStorageData.hovedkategorier.length}`);
-  console.log(`  underkategorier: ${localStorageData.underkategorier.length}`);
-  console.log(`  transactions: ${localStorageData.transactions.length}`);
-  console.log(`  rules: ${localStorageData.rules.length}`);
-  console.log();
-
-  // Create a simple HTML page to load this data
-  const loaderHTML = `<!DOCTYPE html>
+  // Also create an HTML helper file
+  const htmlPath = join(process.cwd(), 'public', 'load-categories.html');
+  const html = `<!DOCTYPE html>
 <html lang="no">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Last Kategorier</title>
-    <style>
-        body {
-            font-family: system-ui, -apple-system, sans-serif;
-            max-width: 600px;
-            margin: 50px auto;
-            padding: 20px;
-            background: #f9fafb;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        h1 { color: #1f2937; margin-bottom: 10px; }
-        .info { color: #6b7280; margin-bottom: 20px; }
-        button {
-            background: #3b82f6;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 500;
-        }
-        button:hover { background: #2563eb; }
-        .success { background: #10b981; padding: 15px; border-radius: 6px; color: white; margin-top: 20px; display: none; }
-        .error { background: #ef4444; padding: 15px; border-radius: 6px; color: white; margin-top: 20px; display: none; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Load Categories - Personal Finance Tool</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      background: #f5f5f5;
+      border-radius: 8px;
+      padding: 30px;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    .success {
+      background: #10b981;
+    }
+    .danger {
+      background: #ef4444;
+    }
+    .info {
+      background: #f3f4f6;
+      border-left: 4px solid #3b82f6;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .stats {
+      background: white;
+      padding: 20px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .stats h3 {
+      margin-top: 0;
+    }
+    ul {
+      list-style: none;
+      padding: 0;
+    }
+    li {
+      padding: 5px 0;
+    }
+    li::before {
+      content: "✓ ";
+      color: #10b981;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📁 Last Kategorier</h1>
-        <p class="info">Klikk for å laste 33 kategorier til localStorage</p>
-        
-        <button onclick="loadData()">Last kategorier</button>
-        
-        <div id="success" class="success"></div>
-        <div id="error" class="error"></div>
+  <div class="container">
+    <h1>🏦 Load Categories into Browser</h1>
+    
+    <div class="info">
+      <strong>What this does:</strong> Loads the pre-configured categories (Inntekter, Sparing, Overført, 
+      FORUTSIGBARE UTGIFTER, UFORUTSIGBARE UTGIFTER, LIVSOPPHOLD) into your browser's localStorage.
     </div>
 
-    <script>
-        async function loadData() {
-            try {
-                const response = await fetch('/initial-data.json');
-                const data = await response.json();
-                
-                // Store in localStorage
-                localStorage.setItem('transaction-app-data', JSON.stringify(data));
-                
-                document.getElementById('success').style.display = 'block';
-                document.getElementById('success').textContent = 
-                    '✅ Lastet ' + data.hovedkategorier.length + ' hovedkategorier og ' + 
-                    data.underkategorier.length + ' underkategorier! Går til appen...';
-                
-                setTimeout(() => {
-                    window.location.href = '/';
-                }, 1500);
-            } catch (error) {
-                document.getElementById('error').style.display = 'block';
-                document.getElementById('error').textContent = '❌ Feil: ' + error.message;
-            }
-        }
-    </script>
+    <div class="stats" id="stats" style="display:none;">
+      <h3>Current Data in localStorage:</h3>
+      <ul id="currentStats"></ul>
+    </div>
+
+    <div style="margin: 30px 0;">
+      <button onclick="loadCategories()">📥 Load Categories</button>
+      <button onclick="checkCurrentData()">🔍 Check Current Data</button>
+      <button onclick="clearData()" class="danger">🗑️ Clear All Data</button>
+      <button onclick="goToApp()">🚀 Open App</button>
+    </div>
+
+    <div id="message" style="margin-top: 20px;"></div>
+  </div>
+
+  <script>
+    function showMessage(text, isError = false) {
+      const msg = document.getElementById('message');
+      msg.innerHTML = '<div class="info" style="border-color: ' + (isError ? '#ef4444' : '#10b981') + ';">' + text + '</div>';
+    }
+
+    async function loadCategories() {
+      try {
+        showMessage('Loading categories from server...');
+        
+        const response = await fetch('/initial-data.json');
+        const data = await response.json();
+        
+        // Save to localStorage
+        localStorage.setItem('transaction-store', JSON.stringify(data));
+        
+        // Show success message
+        const hovedkat = data.state.hovedkategorier?.length || 0;
+        const underkat = data.state.underkategorier?.length || 0;
+        
+        showMessage(\`
+          <strong>✅ Success!</strong><br><br>
+          Loaded <strong>\${hovedkat} hovedkategorier</strong> and <strong>\${underkat} underkategorier</strong><br><br>
+          Categories:<br>
+          • 💰 Inntekter (with 3 subcategories)<br>
+          • 💎 Sparing<br>
+          • ↔️ Overført<br>
+          • 📁 FORUTSIGBARE UTGIFTER (11 subcategories)<br>
+          • 📁 UFORUTSIGBARE UTGIFTER (9 subcategories)<br>
+          • 📁 LIVSOPPHOLD (7 subcategories)<br><br>
+          <strong>Next:</strong> Click "Open App" or refresh your app page.
+        \`);
+        
+        checkCurrentData();
+      } catch (error) {
+        showMessage('❌ Error loading categories: ' + error.message, true);
+        console.error(error);
+      }
+    }
+
+    function checkCurrentData() {
+      const stored = localStorage.getItem('transaction-store');
+      const statsDiv = document.getElementById('stats');
+      const statsList = document.getElementById('currentStats');
+      
+      if (!stored) {
+        statsList.innerHTML = '<li style="color: #ef4444;">No data in localStorage</li>';
+        statsDiv.style.display = 'block';
+        return;
+      }
+
+      try {
+        const data = JSON.parse(stored);
+        const hovedkat = data.state?.hovedkategorier?.length || 0;
+        const underkat = data.state?.underkategorier?.length || 0;
+        const trans = data.state?.transactions?.length || 0;
+        const rules = data.state?.rules?.length || 0;
+        
+        statsList.innerHTML = \`
+          <li>Hovedkategorier: \${hovedkat}</li>
+          <li>Underkategorier: \${underkat}</li>
+          <li>Transactions: \${trans}</li>
+          <li>Rules: \${rules}</li>
+        \`;
+        statsDiv.style.display = 'block';
+      } catch (error) {
+        statsList.innerHTML = '<li style="color: #ef4444;">Error reading data</li>';
+        statsDiv.style.display = 'block';
+      }
+    }
+
+    function clearData() {
+      if (confirm('Are you sure you want to clear all data from localStorage?')) {
+        localStorage.removeItem('transaction-store');
+        showMessage('🗑️ All data cleared from localStorage');
+        checkCurrentData();
+      }
+    }
+
+    function goToApp() {
+      window.location.href = '/';
+    }
+
+    // Check on load
+    window.onload = checkCurrentData;
+  </script>
 </body>
 </html>`;
 
-  const loaderPath = join(process.cwd(), 'public', 'load-categories.html');
-  await fs.writeFile(loaderPath, loaderHTML, 'utf-8');
-
-  console.log('✓ Opprettet loader-side:');
-  console.log(`  ${loaderPath}`);
-  console.log();
-
-  console.log('='.repeat(80));
-  console.log('✅ SYNKRONISERING FULLFØRT');
-  console.log('='.repeat(80));
-  console.log();
-
-  console.log('🌐 FOR Å LASTE KATEGORIENE I BROWSER:');
-  console.log();
-  console.log('  1. Åpne: http://localhost:3000/load-categories.html');
-  console.log('  2. Klikk "Last kategorier"');
-  console.log('  3. Du sendes automatisk til appen med alle kategorier!');
-  console.log();
-  console.log('Eller manuelt i browser console:');
-  console.log('  1. Åpne http://localhost:3000');
-  console.log('  2. Press F12');
-  console.log('  3. Gå til Console');
-  console.log('  4. Kjør:');
-  console.log('     fetch("/initial-data.json").then(r=>r.json()).then(data=>{localStorage.setItem("transaction-app-data",JSON.stringify(data));location.reload()})');
-  console.log();
+  await writeFile(htmlPath, html);
+  console.log(`✅ Created helper page: ${htmlPath}`);
+  console.log('\n🌐 To load categories in browser:');
+  console.log('  1. npm run dev');
+  console.log('  2. Visit: http://localhost:3000/load-categories.html');
+  console.log('  3. Click "Load Categories"\n');
 }
 
-syncToLocalStorage().catch(console.error);
-
+syncToLocalStorage()
+  .then(() => {
+    console.log('✨ Sync complete!\n');
+    process.exit(0);
+  })
+  .catch((error) => {
+    console.error('❌ Sync failed:', error);
+    process.exit(1);
+  });
