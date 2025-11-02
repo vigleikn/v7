@@ -9,7 +9,7 @@ npm install zustand immer
 ## Basic Usage
 
 ```tsx
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 
 function MyComponent() {
   // Get state
@@ -105,7 +105,7 @@ import {
   selectFilteredTransactions,
   selectStats,
   selectSelectedTransactions,
-} from './store';
+} from './src/store';
 
 const kategorier = useTransactionStore(selectHovedkategorier);
 const transactions = useTransactionStore(selectFilteredTransactions);
@@ -298,7 +298,7 @@ function CategoryList() {
 ## Testing
 
 ```typescript
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 
 describe('Store', () => {
   beforeEach(() => {
@@ -350,7 +350,7 @@ import {
   selectHovedkategorier,
   selectFilteredTransactions,
   selectStats,
-} from './store';
+} from './src/store';
 
 function App() {
   const kategorier = useTransactionStore(selectHovedkategorier);

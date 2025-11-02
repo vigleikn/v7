@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useMemo, useRef } from 'react';
-import { useTransactionStore, selectFilteredTransactions, selectHovedkategorier } from '../store';
-import { CategorizedTransaction } from '../store';
+import { useTransactionStore, selectFilteredTransactions, selectHovedkategorier } from '../src/store';
+import { CategorizedTransaction } from '../src/store';
 import { Sidebar } from './Sidebar';
 import { Card, CardHeader, CardContent } from './ui/card';
 import { Button } from './ui/button';

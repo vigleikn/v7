@@ -3,12 +3,12 @@
  * localStorage-based persistence for React apps
  */
 
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import {
   CategorizedTransaction,
   Hovedkategori,
   Underkategori,
-} from '../store';
+} from '../src/store';
 import {
   CategoryRule,
   TransactionLock,

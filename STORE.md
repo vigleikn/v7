@@ -30,7 +30,7 @@ npm install zustand immer
 ## Basic Usage
 
 ```typescript
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 
 function MyComponent() {
   // Select specific state
@@ -242,7 +242,7 @@ import {
   selectSelectedTransactions,
   selectRules,
   selectLocks,
-} from './store';
+} from './src/store';
 
 // In component
 const hovedkategorier = useTransactionStore(selectHovedkategorier);
@@ -396,7 +396,7 @@ export const useTransactionStore = create<TransactionStore>()(
 ### Category List with Drag & Drop
 
 ```tsx
-import { useTransactionStore, selectHovedkategorier } from './store';
+import { useTransactionStore, selectHovedkategorier } from './src/store';
 
 function CategoryList() {
   const kategorier = useTransactionStore(selectHovedkategorier);
@@ -421,7 +421,7 @@ import {
   useTransactionStore,
   selectFilteredTransactions,
   selectStats,
-} from './store';
+} from './src/store';
 
 function TransactionTable() {
   const transactions = useTransactionStore(selectFilteredTransactions);
@@ -580,7 +580,7 @@ function TransactionList() {
 ## Testing
 
 ```typescript
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 
 describe('TransactionStore', () => {
   beforeEach(() => {
@@ -623,7 +623,7 @@ state.rules = setRule(state.rules, 'KIWI', categoryId);
 const result = applyRules(transactions, state);
 
 // New way with Zustand
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 
 const createRule = useTransactionStore(state => state.createRule);
 const applyRulesToAll = useTransactionStore(state => state.applyRulesToAll);

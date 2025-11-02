@@ -10,7 +10,7 @@ import {
   CategorizedTransaction,
   Hovedkategori,
   Underkategori,
-} from '../store';
+} from '../src/store';
 import {
   CategoryRule,
   TransactionLock,

@@ -4,7 +4,7 @@
  * without React - pure store logic
  */
 
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 import { generateTransactionId } from './categoryEngine';
 import { Transaction } from './csvParser';
 

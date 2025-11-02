@@ -4,8 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { useTransactionStore, selectHovedkategorier } from '../store';
-import { Hovedkategori, Underkategori } from '../store';
+import { useTransactionStore, selectHovedkategorier } from '../src/store';
+import { Hovedkategori, Underkategori } from '../src/store';
 import { Sidebar } from './Sidebar';
 import { Card, CardHeader, CardContent } from './ui/card';
 import { Button } from './ui/button';

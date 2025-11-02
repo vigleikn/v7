@@ -4,7 +4,7 @@
  * Dekker realistiske brukerscenarier fra tom start til full funksjonalitet
  */
 
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
 import { Transaction } from '../csvParser';
 import PersistenceService from '../services/persistence';

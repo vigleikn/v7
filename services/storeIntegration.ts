@@ -3,7 +3,7 @@
  * Connects Zustand store with the persistence service
  */
 
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import PersistenceService from './persistence';
 
 // ============================================================================

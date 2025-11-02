@@ -132,7 +132,7 @@ const handleBulkAddSubcategories = (names: string[]) => {
 ### Direct Store Call
 
 ```typescript
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 
 const store = useTransactionStore.getState();
 store.addSubcategoriesBulk('cat_123', [

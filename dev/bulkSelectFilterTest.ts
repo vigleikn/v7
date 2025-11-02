@@ -3,7 +3,7 @@
  * Verifies that selectAll only selects filtered transactions
  */
 
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
 
 function logSection(title: string) {

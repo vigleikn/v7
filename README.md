@@ -117,7 +117,7 @@ Demonstrates:
 
 ```typescript
 import { parseCSVFile } from './csvParser';
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 import { generateTransactionId } from './categoryEngine';
 
 const result = await parseCSVFile('./data/23421.csv');

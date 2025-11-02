@@ -112,7 +112,7 @@ All categories have been tested and verified:
 ### Loading Categories in React
 
 ```typescript
-import { useTransactionStore } from "./store";
+import { useTransactionStore } from "./src/store";
 import { loadFromBrowser } from "./services/browserPersistence";
 
 function CategoryPage() {

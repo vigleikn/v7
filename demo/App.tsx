@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CategoryPage } from '../components/CategoryPage';
 import { TransactionPage } from '../components/TransactionPage';
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
 import { setupBrowserPersistence } from '../services/browserPersistence';
 import '../styles/globals.css';

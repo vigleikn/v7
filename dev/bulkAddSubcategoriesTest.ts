@@ -10,7 +10,7 @@
  * - Works on both user categories and system category "Sparing"
  */
 
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 
 // ============================================================================
 // Helper Functions

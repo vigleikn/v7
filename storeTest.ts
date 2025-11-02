@@ -3,7 +3,7 @@
  * Tests category management, auto-categorization, and exceptions
  */
 
-import { useTransactionStore } from './store';
+import { useTransactionStore } from './src/store';
 import { Transaction } from './csvParser';
 
 console.log('='.repeat(80));

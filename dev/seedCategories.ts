@@ -4,7 +4,7 @@
  * using existing Zustand store actions, then saves to persistent storage
  */
 
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import { saveAll } from '../services/persistence';
 
 // ============================================================================

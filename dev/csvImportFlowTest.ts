@@ -4,7 +4,7 @@
  */
 
 import { parseCSV } from '../csvParser';
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
 import PersistenceService from '../services/persistence';
 import { saveStoreState, initializeStore } from '../services/storeIntegration';

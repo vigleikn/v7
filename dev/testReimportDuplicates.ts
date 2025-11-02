@@ -4,7 +4,7 @@
  */
 
 import { parseCSVFile } from '../csvParser';
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
 import { join } from 'path';
 

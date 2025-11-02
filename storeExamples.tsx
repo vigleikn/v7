@@ -9,7 +9,7 @@ import {
   selectFilteredTransactions,
   selectStats,
   selectSelectedTransactions,
-} from './store';
+} from './src/store';
 
 // ============================================================================
 // Example 1: Hovedkategori List with Drag & Drop

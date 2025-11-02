@@ -2,7 +2,7 @@
  * Diagnostics - Check where categories are and if they're connected properly
  */
 
-import { useTransactionStore } from '../store';
+import { useTransactionStore } from '../src/store';
 import { loadHovedkategorier, loadUnderkategorier } from '../services/persistence';
 import { promises as fs } from 'fs';
 import { join } from 'path';
