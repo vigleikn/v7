@@ -372,6 +372,14 @@ export function createActions(
     
     categorizeTransactionAction: (transactionId, categoryId, createRule = false) => {
       set((state: TransactionStoreState) => {
+        // Validation: Check if categoryId is a hovedkategori with subcategories
+        const hovedkategori = state.hovedkategorier.get(categoryId);
+        if (hovedkategori && hovedkategori.underkategorier.length > 0) {
+          state.error = 'Kan ikke tilordne hovedkategori med underkategorier. Velg en underkategori.';
+          console.error('❌ Validation failed: Cannot assign hovedkategori with subcategories');
+          return;
+        }
+        
         const allCategories = new Map<string, Category>();
         state.hovedkategorier.forEach((cat, id) => allCategories.set(id, cat));
         state.underkategorier.forEach((cat, id) => allCategories.set(id, cat));
@@ -425,9 +433,25 @@ export function createActions(
       set((state: TransactionStoreState) => {
         const { transactionIds, categoryId, createRule, lockTransactions, lockReason } = payload;
         
+        // Validation: Check if categoryId is a hovedkategori with subcategories
+        if (categoryId !== '__uncategorized') {
+          const hovedkategori = state.hovedkategorier.get(categoryId);
+          if (hovedkategori && hovedkategori.underkategorier.length > 0) {
+            state.error = 'Kan ikke tilordne hovedkategori med underkategorier. Velg en underkategori.';
+            console.error('❌ Bulk validation failed: Cannot assign hovedkategori with subcategories');
+            return;
+          }
+        }
+        
         transactionIds.forEach(txId => {
           const tx = state.transactions.find(t => t.transactionId === txId);
           if (!tx) return;
+          
+          // Handle uncategorize
+          if (categoryId === '__uncategorized') {
+            state.locks = unlockTransaction(state.locks, txId);
+            return;
+          }
           
           if (lockTransactions) {
             state.locks = lockTransaction(state.locks, txId, categoryId, lockReason);
@@ -638,6 +662,42 @@ export function createActions(
     refreshStats: () => {
       set((state: TransactionStoreState) => {
         state.stats = getCategorizationStats(state.transactions);
+      });
+    },
+    
+    fixInvalidCategorizations: () => {
+      set((state: TransactionStoreState) => {
+        let fixedCount = 0;
+        
+        state.transactions.forEach(tx => {
+          if (!tx.categoryId) return; // Skip uncategorized
+          
+          const hovedkategori = state.hovedkategorier.get(tx.categoryId);
+          
+          // Check if transaction is assigned to a hovedkategori with subcategories
+          if (hovedkategori && hovedkategori.underkategorier.length > 0) {
+            // Invalid! Set to uncategorized and unlock
+            tx.categoryId = undefined;
+            tx.isLocked = false;
+            state.locks = unlockTransaction(state.locks, tx.transactionId);
+            fixedCount++;
+            
+            console.log(`🔧 Fixed invalid categorization: ${tx.transactionId} was assigned to "${hovedkategori.name}" (has subcategories)`);
+          }
+        });
+        
+        if (fixedCount > 0) {
+          console.log(`✅ Fixed ${fixedCount} invalid categorizations`);
+          
+          // Refresh filtered transactions and stats
+          state.filteredTransactions = applyFiltersToTransactions(
+            state.transactions,
+            state.filters
+          );
+          state.stats = getCategorizationStats(state.transactions);
+        } else {
+          console.log('✅ No invalid categorizations found');
+        }
       });
     },
     

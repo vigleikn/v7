@@ -152,6 +152,7 @@ export interface TransactionStoreActions {
   // Utility Actions
   applyRulesToAll: () => void;
   refreshStats: () => void;
+  fixInvalidCategorizations: () => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;

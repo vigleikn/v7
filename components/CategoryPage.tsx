@@ -668,7 +668,7 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-8">
+        <div className="max-w-[1600px] mx-auto p-8">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Kategorier</h1>

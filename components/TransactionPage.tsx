@@ -61,16 +61,27 @@ const TransactionFilterBar: React.FC<TransactionFilterBarProps> = ({
   );
 
   // Get all categories flat for dropdown
+  // Rules: Only show subcategories OR hovedkategorier without subcategories (like Overført)
   const allCategories = useMemo(() => {
     const cats: Array<{ id: string; name: string; isSubcategory: boolean }> = [];
+    
     hovedkategorier.forEach((hk) => {
-      cats.push({ id: hk.id, name: hk.name, isSubcategory: false });
       const details = getHovedkategoriWithUnderkategorier(hk.id);
+      const hasSubcategories = details?.underkategorier && details.underkategorier.length > 0;
+      
+      // Only add hovedkategori if it has NO subcategories (e.g., Overført)
+      if (!hasSubcategories) {
+        cats.push({ id: hk.id, name: hk.name, isSubcategory: false });
+      }
+      
+      // Always add all underkategorier (without bullet)
       details?.underkategorier.forEach((uk) => {
-        cats.push({ id: uk.id, name: `  └─ ${uk.name}`, isSubcategory: true });
+        cats.push({ id: uk.id, name: uk.name, isSubcategory: true });
       });
     });
-    return cats;
+    
+    // Sort alphabetically by name
+    return cats.sort((a, b) => a.name.localeCompare(b.name, 'no'));
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   const hasActiveFilters = searchValue || dateFromValue || dateToValue || typeValue || categoryValue;
@@ -179,16 +190,27 @@ const BulkActionBar: React.FC<BulkActionBarProps> = ({
   );
 
   // Get all categories flat for dropdown
+  // Rules: Only show subcategories OR hovedkategorier without subcategories (like Overført)
   const allCategories = useMemo(() => {
     const cats: Array<{ id: string; name: string; isSubcategory: boolean }> = [];
+    
     hovedkategorier.forEach((hk) => {
-      cats.push({ id: hk.id, name: hk.name, isSubcategory: false });
       const details = getHovedkategoriWithUnderkategorier(hk.id);
+      const hasSubcategories = details?.underkategorier && details.underkategorier.length > 0;
+      
+      // Only add hovedkategori if it has NO subcategories (e.g., Overført)
+      if (!hasSubcategories) {
+        cats.push({ id: hk.id, name: hk.name, isSubcategory: false });
+      }
+      
+      // Always add all underkategorier (without bullet)
       details?.underkategorier.forEach((uk) => {
-        cats.push({ id: uk.id, name: `  └─ ${uk.name}`, isSubcategory: true });
+        cats.push({ id: uk.id, name: uk.name, isSubcategory: true });
       });
     });
-    return cats;
+    
+    // Sort alphabetically by name
+    return cats.sort((a, b) => a.name.localeCompare(b.name, 'no'));
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   const handleCategorize = () => {
@@ -214,6 +236,7 @@ const BulkActionBar: React.FC<BulkActionBarProps> = ({
                 onChange={(e) => setSelectedCategory(e.target.value)}
               >
                 <option value="">Velg kategori...</option>
+                <option value="__uncategorized">Ukategorisert</option>
                 {allCategories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.name}
@@ -277,24 +300,55 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
   );
 
   // Get all categories flat for dropdown
+  // Rules: Only show subcategories OR hovedkategorier without subcategories (like Overført)
   const allCategories = useMemo(() => {
-    const cats: Array<{ id: string; name: string }> = [];
+    const cats: Array<{ id: string; name: string; isSubcategory: boolean }> = [];
+    
     hovedkategorier.forEach((hk) => {
-      cats.push({ id: hk.id, name: hk.name });
       const details = getHovedkategoriWithUnderkategorier(hk.id);
+      const hasSubcategories = details?.underkategorier && details.underkategorier.length > 0;
+      
+      // Only add hovedkategori if it has NO subcategories (e.g., Overført)
+      if (!hasSubcategories) {
+        cats.push({ id: hk.id, name: hk.name, isSubcategory: false });
+      }
+      
+      // Always add all underkategorier (without bullet)
       details?.underkategorier.forEach((uk) => {
-        cats.push({ id: uk.id, name: `└─ ${uk.name}` });
+        cats.push({ id: uk.id, name: uk.name, isSubcategory: true });
       });
     });
-    return cats;
+    
+    // Sort alphabetically by name
+    return cats.sort((a, b) => a.name.localeCompare(b.name, 'no'));
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   // Format amount without decimals
   const formattedAmount = Math.round(transaction.beløp).toString();
   const amountColor = transaction.beløp >= 0 ? 'text-green-600' : 'text-red-600';
 
-  // Combine from/to account
-  const accountInfo = transaction.fraKonto || transaction.tilKonto || '-';
+  // Format date to Norwegian short format (dd.mm.yy)
+  const formatDateShort = (dateStr: string): string => {
+    // Input format: YYYY-MM-DD or DD.MM.YYYY
+    if (dateStr.includes('.')) {
+      // Already in DD.MM.YYYY format, convert to dd.mm.yy
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        const [day, month, year] = parts;
+        return `${day}.${month}.${year.slice(-2)}`;
+      }
+      return dateStr;
+    } else if (dateStr.includes('-')) {
+      // YYYY-MM-DD format, convert to dd.mm.yy
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        const [year, month, day] = parts;
+        return `${day}.${month}.${year.slice(-2)}`;
+      }
+      return dateStr;
+    }
+    return dateStr;
+  };
 
   return (
     <TableRow data-state={isSelected ? 'selected' : undefined}>
@@ -305,7 +359,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
 
       {/* Date */}
       <TableCell className="font-medium whitespace-nowrap">
-        {transaction.dato}
+        {formatDateShort(transaction.dato)}
       </TableCell>
 
       {/* Amount */}
@@ -323,18 +377,13 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         {transaction.tekst}
       </TableCell>
 
-      {/* Account */}
-      <TableCell className="text-sm text-gray-600">
-        {accountInfo}
-      </TableCell>
-
       {/* Underkategori (from CSV, read-only) */}
       <TableCell className="text-sm text-gray-500 italic">
         {transaction.underkategori || '-'}
       </TableCell>
 
       {/* Category (dropdown) */}
-      <TableCell>
+      <TableCell className="max-w-[12rem]">
         <div className="flex items-center gap-2">
           {transaction.isLocked && (
             <span className="text-amber-600" title="Låst som unntak">
@@ -348,6 +397,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
             className="text-sm"
           >
             <option value="">Velg kategori...</option>
+            <option value="__uncategorized">Ukategorisert</option>
             {allCategories.map((cat) => (
               <option key={cat.id} value={cat.id}>
                 {cat.name}
@@ -355,6 +405,26 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
             ))}
           </Select>
         </div>
+      </TableCell>
+
+      {/* Til konto */}
+      <TableCell className="text-sm text-gray-600">
+        {transaction.tilKonto || '-'}
+      </TableCell>
+
+      {/* Til kontonummer */}
+      <TableCell className="text-sm text-gray-600 font-mono">
+        {transaction.tilKontonummer || '-'}
+      </TableCell>
+
+      {/* Fra konto */}
+      <TableCell className="text-sm text-gray-600">
+        {transaction.fraKonto || '-'}
+      </TableCell>
+
+      {/* Fra kontonummer */}
+      <TableCell className="text-sm text-gray-600 font-mono">
+        {transaction.fraKontonummer || '-'}
       </TableCell>
     </TableRow>
   );
@@ -450,11 +520,16 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
   };
 
   const handleCategorize = (transactionId: string, categoryId: string) => {
+    if (categoryId === '__uncategorized') {
+      // Uncategorize: set categoryId to undefined and unlock if locked
+      const unlockTransactionAction = useTransactionStore.getState().unlockTransactionAction;
+      unlockTransactionAction(transactionId);
+      return;
+    }
+    
     if (categoryId) {
-      const createRule = confirm(
-        'Vil du lage en regel for alle transaksjoner med samme tekst?'
-      );
-      categorizeTransactionAction(transactionId, categoryId, createRule);
+      // Automatically create rule based on transaction text (no confirmation dialog)
+      categorizeTransactionAction(transactionId, categoryId, true);
     }
   };
 
@@ -577,7 +652,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto p-8">
+        <div className="max-w-[1600px] mx-auto p-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-start justify-between">
@@ -662,9 +737,12 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                 <TableHead>Beløp</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Tekst</TableHead>
-                <TableHead>Konto</TableHead>
                 <TableHead>Underkategori</TableHead>
                 <TableHead>Kategori</TableHead>
+                <TableHead>Til konto</TableHead>
+                <TableHead>Til kontonummer</TableHead>
+                <TableHead>Fra konto</TableHead>
+                <TableHead>Fra kontonummer</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -687,7 +765,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-12 text-gray-500">
+                  <TableCell colSpan={11} className="text-center py-12 text-gray-500">
                     Ingen transaksjoner funnet
                   </TableCell>
                 </TableRow>
