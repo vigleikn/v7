@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo, useRef } from 'react';
+import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useTransactionStore, selectFilteredTransactions, selectHovedkategorier } from '../src/store';
 import { CategorizedTransaction } from '../src/store';
 import { Sidebar } from './Sidebar';
@@ -438,11 +439,22 @@ interface TransactionPageProps {
   onNavigate?: (page: string) => void;
 }
 
+type SortField = 'tekst' | 'beløp' | null;
+type SortDirection = 'asc' | 'desc' | null;
+
 export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) => {
   const [activePage] = useState('transaksjoner');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 250;
+  
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>(null);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
   
   // Local state for filters
   const [searchValue, setSearchValue] = useState('');
@@ -495,12 +507,62 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
   // Use filtered transactions from store (already filtered)
   const filteredTransactions = useTransactionStore(selectFilteredTransactions);
 
+  // Apply sorting to filtered transactions
+  const sortedTransactions = React.useMemo(() => {
+    if (!sortField || !sortDirection) {
+      return filteredTransactions;
+    }
+
+    const sorted = [...filteredTransactions];
+    
+    sorted.sort((a, b) => {
+      let comparison = 0;
+      
+      if (sortField === 'tekst') {
+        comparison = a.tekst.localeCompare(b.tekst, 'no');
+      } else if (sortField === 'beløp') {
+        comparison = a.beløp - b.beløp;
+      }
+      
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+    
+    return sorted;
+  }, [filteredTransactions, sortField, sortDirection]);
+
+  // Calculate pagination
+  const totalPages = Math.ceil(sortedTransactions.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedTransactions = sortedTransactions.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters or sorting change
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, dateFromValue, dateToValue, typeValue, categoryValue, sortField, sortDirection]);
+
   const handleClearFilters = () => {
     setSearchValue('');
     setDateFromValue('');
     setDateToValue('');
     setTypeValue('');
     setCategoryValue('');
+  };
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // Cycle through: asc -> desc -> none
+      if (sortDirection === 'asc') {
+        setSortDirection('desc');
+      } else if (sortDirection === 'desc') {
+        setSortField(null);
+        setSortDirection(null);
+      }
+    } else {
+      // New field: start with asc
+      setSortField(field);
+      setSortDirection('asc');
+    }
   };
 
   const handleToggleSelection = (id: string, isSelected: boolean) => {
@@ -562,41 +624,54 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
 
       console.log(`📄 CSV parsed: ${parseResult.originalCount} transaksjoner`);
 
-      // Convert to categorized transactions
+      // Convert to categorized transactions with UUID
       const newTransactions = parseResult.transactions.map((tx) => ({
         ...tx,
-        transactionId: generateTransactionId(tx),
+        id: crypto.randomUUID(), // Unique UUID for each transaction
+        transactionId: generateTransactionId(tx), // Content hash for duplicate detection
         categoryId: undefined,
         isLocked: false,
       }));
 
       // Check for duplicates against existing transactions in store
-      const existingIds = new Set(transactions.map((t) => t.transactionId));
+      // Uses transactionId (content hash) for duplicate detection
+      // Note: New transactions already have UUID (id), but duplicates are matched by content
+      const existingContentHashes = new Set(transactions.map((t) => t.transactionId));
       const duplicateTransactions = newTransactions.filter(
-        (tx) => existingIds.has(tx.transactionId)
+        (tx) => existingContentHashes.has(tx.transactionId)
       );
       const uniqueNewTransactions = newTransactions.filter(
-        (tx) => !existingIds.has(tx.transactionId)
+        (tx) => !existingContentHashes.has(tx.transactionId)
       );
 
       const duplicatesCount = duplicateTransactions.length;
+      const newCount = uniqueNewTransactions.length;
 
-      console.log(`🔍 Duplicate check: ${duplicatesCount} duplikater mot eksisterende data`);
+      console.log(`📊 Import analysis:`);
+      console.log(`   CSV rows parsed: ${parseResult.originalCount}`);
+      console.log(`   Existing in store: ${transactions.length}`);
+      console.log(`   New transactions: ${newCount}`);
+      console.log(`   Duplicates skipped: ${duplicatesCount}`);
       
       // Log duplicates if any
       if (duplicatesCount > 0) {
-        console.log(`⛔ Duplikater funnet (vises ikke de ${Math.min(10, duplicatesCount)} første):`);
+        console.log(`\n⛔ Duplikater funnet (viser de ${Math.min(10, duplicatesCount)} første):`);
         duplicateTransactions.slice(0, 10).forEach((dup, i) => {
           const beløp = Math.round(dup.beløp);
           const arrow = dup.beløp < 0 ? '→' : '←';
           console.log(`   ${i + 1}. [${dup.dato}] ${beløp} kr • ${dup.tekst} • ${dup.fraKontonummer || 'N/A'} ${arrow} ${dup.tilKontonummer || 'N/A'}`);
+          console.log(`       Content hash: ${dup.transactionId.substring(0, 50)}...`);
         });
       }
 
       if (uniqueNewTransactions.length === 0) {
-        setImportStatus('Ingen nye transaksjoner å importere (alle er duplikater)');
+        const message = `ℹ️ Ingen nye transaksjoner - alle ${duplicatesCount} finnes allerede i systemet`;
+        setImportStatus(message);
+        console.log(`\n${message}`);
         return;
       }
+
+      console.log(`\n✨ Importing ${newCount} new transactions with UUID...`);
 
       // Combine with existing transactions
       const allTransactions = [...transactions, ...uniqueNewTransactions];
@@ -612,21 +687,23 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
       // Get categorization stats
       const currentState = useTransactionStore.getState();
       const autoCategorized = uniqueNewTransactions.filter((tx) => {
-        const updated = currentState.transactions.find((t) => t.transactionId === tx.transactionId);
+        const updated = currentState.transactions.find((t) => t.id === tx.id);
         return updated && updated.categoryId;
       }).length;
 
       // Save to persistence
       saveToBrowser();
 
-      // Show success message
-      const message = `✅ Importert ${uniqueNewTransactions.length} nye transaksjoner • ${autoCategorized} auto-kategorisert • ${duplicatesCount} duplikater ignorert`;
+      // Show success message with detailed stats
+      const message = `✅ Importert ${newCount} nye transaksjoner • ${autoCategorized} auto-kategorisert • ${duplicatesCount} duplikater ignorert`;
       setImportStatus(message);
 
-      console.log('✅ Import fullført:');
-      console.log(`   Nye transaksjoner: ${uniqueNewTransactions.length}`);
+      console.log('\n✅ Import fullført:');
+      console.log(`   CSV rows: ${parseResult.originalCount}`);
+      console.log(`   Nye transaksjoner: ${newCount} (hver med unik UUID)`);
       console.log(`   Auto-kategorisert: ${autoCategorized}`);
       console.log(`   Duplikater ignorert: ${duplicatesCount}`);
+      console.log(`   Total i system: ${currentState.transactions.length}`);
     } catch (error) {
       console.error('Import feilet:', error);
       setImportStatus(`❌ Feil ved import: ${error instanceof Error ? error.message : 'Ukjent feil'}`);
@@ -734,9 +811,41 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                   />
                 </TableHead>
                 <TableHead>Dato</TableHead>
-                <TableHead>Beløp</TableHead>
+                <TableHead>
+                  <button
+                    onClick={() => handleSort('beløp')}
+                    className="flex items-center gap-1 hover:text-gray-900 transition-colors"
+                  >
+                    Beløp
+                    {sortField === 'beløp' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="w-4 h-4" />
+                      ) : (
+                        <ArrowDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4 opacity-40" />
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>Type</TableHead>
-                <TableHead>Tekst</TableHead>
+                <TableHead>
+                  <button
+                    onClick={() => handleSort('tekst')}
+                    className="flex items-center gap-1 hover:text-gray-900 transition-colors"
+                  >
+                    Tekst
+                    {sortField === 'tekst' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="w-4 h-4" />
+                      ) : (
+                        <ArrowDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4 opacity-40" />
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>Underkategori</TableHead>
                 <TableHead>Kategori</TableHead>
                 <TableHead>Til konto</TableHead>
@@ -746,16 +855,16 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.length > 0 ? (
-                filteredTransactions.map((transaction) => (
+              {paginatedTransactions.length > 0 ? (
+                paginatedTransactions.map((transaction) => (
                   <TransactionRow
-                    key={transaction.transactionId}
+                    key={transaction.id}
                     transaction={transaction}
-                    isSelected={selection.selectedIds.has(transaction.transactionId)}
+                    isSelected={selection.selectedIds.has(transaction.id)}
                     onToggleSelect={() =>
                       handleToggleSelection(
-                        transaction.transactionId,
-                        selection.selectedIds.has(transaction.transactionId)
+                        transaction.id,
+                        selection.selectedIds.has(transaction.id)
                       )
                     }
                     onCategorize={(categoryId) =>
@@ -774,11 +883,85 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
           </Table>
         </Card>
 
-        {/* Footer info */}
-        <div className="mt-4 text-sm text-gray-600">
-          Viser {filteredTransactions.length} av {stats.total} transaksjoner
-          {selectedCount > 0 && ` • ${selectedCount} valgt`}
-        </div>
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-between">
+            <div className="text-sm text-gray-600">
+              Viser {startIndex + 1}-{Math.min(endIndex, sortedTransactions.length)} av {sortedTransactions.length} transaksjoner
+              {selectedCount > 0 && ` • ${selectedCount} valgt`}
+              {sortField && sortDirection && (
+                <span className="ml-2 text-blue-600">
+                  • Sortert etter {sortField === 'beløp' ? 'Beløp' : 'Tekst'} ({sortDirection === 'asc' ? 'stigende' : 'synkende'})
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                disabled={currentPage === 1}
+              >
+                ← Forrige
+              </Button>
+              
+              <div className="flex items-center gap-1">
+                {/* Show page numbers */}
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  // Show first page, current page +/- 1, and last page
+                  let pageNum: number;
+                  
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded text-sm font-medium transition-colors ${
+                        currentPage === pageNum
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-300'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                disabled={currentPage === totalPages}
+              >
+                Neste →
+              </Button>
+            </div>
+          </div>
+        )}
+        
+        {/* Footer info - show even without pagination */}
+        {totalPages <= 1 && (
+          <div className="mt-4 text-sm text-gray-600">
+            Viser {sortedTransactions.length} av {stats.total} transaksjoner
+            {selectedCount > 0 && ` • ${selectedCount} valgt`}
+            {sortField && sortDirection && (
+              <span className="ml-2 text-blue-600">
+                • Sortert etter {sortField === 'beløp' ? 'Beløp' : 'Tekst'} ({sortDirection === 'asc' ? 'stigende' : 'synkende'})
+              </span>
+            )}
+          </div>
+        )}
         </div>
       </div>
     </div>

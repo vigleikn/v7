@@ -32,7 +32,8 @@ export interface TransactionLock {
 }
 
 export interface CategorizedTransaction extends Transaction {
-  transactionId: string; // Unique ID for tracking
+  id: string; // Unique UUID for each transaction
+  transactionId: string; // Content hash for duplicate detection
   categoryId?: string;
   isLocked: boolean;
 }

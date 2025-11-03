@@ -90,8 +90,8 @@ async function runTest() {
 
   console.log('Parser-resultat:');
   console.log(`  Total transaksjoner funnet: ${parseResult.originalCount}`);
-  console.log(`  Unike transaksjoner: ${parseResult.uniqueCount}`);
-  console.log(`  Duplikater i CSV: ${parseResult.duplicates.length}`);
+  console.log(`  Transaksjoner returnert: ${parseResult.transactions.length}`);
+  console.log('  Note: CSV parser sjekker IKKE for duplikater internt (by design)');
   console.log();
 
   console.log('Parsede transaksjoner:');
@@ -102,10 +102,10 @@ async function runTest() {
   });
   console.log();
 
-  if (parseResult.uniqueCount === 3) {
+  if (parseResult.transactions.length === 3) {
     console.log('✅ SUKSESS: Parser returnerte korrekt antall transaksjoner');
   } else {
-    console.log(`❌ FEIL: Forventet 3 transaksjoner, fikk ${parseResult.uniqueCount}`);
+    console.log(`❌ FEIL: Forventet 3 transaksjoner, fikk ${parseResult.transactions.length}`);
   }
   console.log();
 
@@ -150,10 +150,11 @@ async function runTest() {
   console.log('✓ Opprettet kategorier: Mat → Dagligvarer');
   console.log();
 
-  // Convert to categorized transactions
+  // Convert to categorized transactions with UUID
   const categorizedTransactions = parseResult.transactions.map(tx => ({
     ...tx,
-    transactionId: generateTransactionId(tx),
+    id: crypto.randomUUID(), // Unique UUID for each transaction
+    transactionId: generateTransactionId(tx), // Content hash for duplicate detection
     categoryId: undefined,
     isLocked: false,
   }));
@@ -325,13 +326,14 @@ async function runTest() {
   // Parse same CSV again
   const parseResult2 = parseCSV(csvString);
 
-  console.log(`  Parser-resultat: ${parseResult2.uniqueCount} unike`);
+  console.log(`  Parser-resultat: ${parseResult2.transactions.length} transaksjoner`);
   console.log();
 
-  // Convert to categorized transactions
+  // Convert to categorized transactions with NEW UUIDs
   const newTransactions2 = parseResult2.transactions.map(tx => ({
     ...tx,
-    transactionId: generateTransactionId(tx),
+    id: crypto.randomUUID(), // NEW UUID (different from first import)
+    transactionId: generateTransactionId(tx), // SAME content hash
     categoryId: undefined,
     isLocked: false,
   }));
@@ -391,12 +393,13 @@ async function runTest() {
   const parseResult3 = parseCSV(newCsvWithExtraRema);
   const newRemaTransactions = parseResult3.transactions.map(tx => ({
     ...tx,
-    transactionId: generateTransactionId(tx),
+    id: crypto.randomUUID(), // New UUID
+    transactionId: generateTransactionId(tx), // Content hash
     categoryId: undefined,
     isLocked: false,
   }));
 
-  console.log(`  Parsed: ${parseResult3.uniqueCount} transaksjon`);
+  console.log(`  Parsed: ${parseResult3.transactions.length} transaksjon`);
   console.log();
 
   // Check if it's unique

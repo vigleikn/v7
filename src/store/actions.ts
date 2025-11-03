@@ -417,12 +417,16 @@ export function createActions(
             result.state
           );
           
-          state.transactions = applyResult.categorized;
+          // Preserve id field when merging results
+          state.transactions = state.transactions.map((original, index) => ({
+            ...applyResult.categorized[index],
+            id: original.id, // Preserve UUID
+          }));
           state.filteredTransactions = applyFiltersToTransactions(
-            applyResult.categorized,
+            state.transactions,
             state.filters
           );
-          state.stats = getCategorizationStats(applyResult.categorized);
+          state.stats = getCategorizationStats(state.transactions);
         } catch (error) {
           state.error = error instanceof Error ? error.message : 'Categorization failed';
         }
@@ -443,18 +447,19 @@ export function createActions(
           }
         }
         
-        transactionIds.forEach(txId => {
-          const tx = state.transactions.find(t => t.transactionId === txId);
+        // transactionIds now contains UUIDs (id field), find transactions by id
+        transactionIds.forEach(id => {
+          const tx = state.transactions.find(t => t.id === id);
           if (!tx) return;
           
           // Handle uncategorize
           if (categoryId === '__uncategorized') {
-            state.locks = unlockTransaction(state.locks, txId);
+            state.locks = unlockTransaction(state.locks, tx.transactionId);
             return;
           }
           
           if (lockTransactions) {
-            state.locks = lockTransaction(state.locks, txId, categoryId, lockReason);
+            state.locks = lockTransaction(state.locks, tx.transactionId, categoryId, lockReason);
           } else if (createRule) {
             state.rules = setRule(state.rules, tx.tekst, categoryId);
           }
@@ -486,12 +491,16 @@ export function createActions(
           engineState
         );
         
-        state.transactions = applyResult.categorized;
+        // Preserve id field when merging results
+        state.transactions = state.transactions.map((original, index) => ({
+          ...applyResult.categorized[index],
+          id: original.id, // Preserve UUID
+        }));
         state.filteredTransactions = applyFiltersToTransactions(
-          applyResult.categorized,
+          state.transactions,
           state.filters
         );
-        state.stats = getCategorizationStats(applyResult.categorized);
+        state.stats = getCategorizationStats(state.transactions);
         
         // Clear selection after bulk update
         state.selection = initialSelection;
@@ -588,7 +597,7 @@ export function createActions(
     selectAll: () => {
       set((state: TransactionStoreState) => {
         state.selection.selectedIds = new Set(
-          state.filteredTransactions.map(t => t.transactionId)
+          state.filteredTransactions.map(t => t.id)
         );
         state.selection.isAllSelected = true;
         state.selection.selectionMode = 'all';
@@ -650,12 +659,16 @@ export function createActions(
           engineState
         );
         
-        state.transactions = applyResult.categorized;
+        // Preserve id field when merging results
+        state.transactions = state.transactions.map((original, index) => ({
+          ...applyResult.categorized[index],
+          id: original.id, // Preserve UUID
+        }));
         state.filteredTransactions = applyFiltersToTransactions(
-          applyResult.categorized,
+          state.transactions,
           state.filters
         );
-        state.stats = getCategorizationStats(applyResult.categorized);
+        state.stats = getCategorizationStats(state.transactions);
       });
     },
     
@@ -760,7 +773,7 @@ export function createActions(
     getSelectedTransactions: () => {
       const state = get();
       return state.filteredTransactions.filter((t: CategorizedTransaction) =>
-        state.selection.selectedIds.has(t.transactionId)
+        state.selection.selectedIds.has(t.id)
       );
     },
     
