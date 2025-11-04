@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { CategoryPage } from '../components/CategoryPage';
 import { TransactionPage } from '../components/TransactionPage';
+import { OversiktPage } from '../components/OversiktPage';
 import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
 import { setupBrowserPersistence } from '../services/browserPersistence';
 import '../styles/globals.css';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'kategorier' | 'transaksjoner'>('transaksjoner');
+  const [currentPage, setCurrentPage] = useState<'kategorier' | 'transaksjoner' | 'oversikt'>('transaksjoner');
   const [isInitialized, setIsInitialized] = useState(false);
   const importTransactions = useTransactionStore((state) => state.importTransactions);
   const transactions = useTransactionStore((state) => state.transactions);
@@ -160,7 +161,7 @@ function App() {
   */
 
   const handleNavigate = (page: string) => {
-    if (page === 'kategorier' || page === 'transaksjoner') {
+    if (page === 'kategorier' || page === 'transaksjoner' || page === 'oversikt') {
       setCurrentPage(page);
     }
   };
@@ -168,6 +169,10 @@ function App() {
   // Render based on current page
   if (currentPage === 'kategorier') {
     return <CategoryPage onNavigate={handleNavigate} />;
+  }
+
+  if (currentPage === 'oversikt') {
+    return <OversiktPage onNavigate={handleNavigate} />;
   }
 
   return <TransactionPage onNavigate={handleNavigate} />;
