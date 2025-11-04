@@ -211,6 +211,9 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
               <span className="font-semibold">Balanse:</span> Inntekter - Utgifter (ekskludert Sparing og Overført)
             </p>
             <p>
+              <span className="font-semibold">Sum/Snitt/Stdavvik:</span> Beregnet fra de siste 11 fullførte månedene (ekskluderer inneværende ufullstendige måned)
+            </p>
+            <p>
               <span className="font-semibold">Stdavvik:</span> Standardavvik viser variasjon i utgifter per måned
             </p>
             <p className="text-xs text-gray-500 mt-2">

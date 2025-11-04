@@ -34,6 +34,9 @@ const MONTH_NAMES = [
   'jul', 'aug', 'sep', 'okt', 'nov', 'des'
 ];
 
+// Number of full months to use for summary calculations (excludes current incomplete month)
+const FULL_MONTHS_BACK = 11;
+
 /**
  * Get the last 12 months from current date (including current month)
  */
@@ -48,6 +51,14 @@ export function getLast12Months(): string[] {
   }
   
   return months;
+}
+
+/**
+ * Get current month in yyyy-MM format
+ */
+export function getCurrentMonth(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
 /**
@@ -167,20 +178,31 @@ export function calculateMonthlyData(
 
 /**
  * Calculate sum, average, and variance for an array of values
+ * @param values - Array of values to calculate stats for
+ * @param excludeIndices - Optional array of indices to exclude from calculations (e.g., current month)
  */
-export function calculateStats(values: number[]): { sum: number; avg: number; variance: number } {
-  const sum = values.reduce((acc, val) => acc + val, 0);
-  const avg = values.length > 0 ? sum / values.length : 0;
+export function calculateStats(
+  values: number[],
+  excludeIndices: number[] = []
+): { sum: number; avg: number; variance: number } {
+  // Filter out excluded indices
+  const filteredValues = values.filter((_, idx) => !excludeIndices.includes(idx));
+  
+  const sum = filteredValues.reduce((acc, val) => acc + val, 0);
+  const avg = filteredValues.length > 0 ? sum / filteredValues.length : 0;
   
   // Calculate variance
-  const squaredDiffs = values.map((val) => Math.pow(val - avg, 2));
-  const variance = squaredDiffs.length > 0 ? squaredDiffs.reduce((acc, val) => acc + val, 0) / squaredDiffs.length : 0;
+  const squaredDiffs = filteredValues.map((val) => Math.pow(val - avg, 2));
+  const variance = squaredDiffs.length > 0 
+    ? squaredDiffs.reduce((acc, val) => acc + val, 0) / squaredDiffs.length 
+    : 0;
   
   return { sum, avg, variance };
 }
 
 /**
  * Build category row data with hierarchy
+ * Summary columns (sum, avg, var) are calculated from full months only (excludes current month)
  */
 export function buildCategoryRows(
   monthlyData: MonthlyData[],
@@ -189,9 +211,14 @@ export function buildCategoryRows(
 ): CategoryRowData[] {
   const rows: CategoryRowData[] = [];
   
+  // Find the index of the current (incomplete) month to exclude from summary calculations
+  const currentMonth = getCurrentMonth();
+  const currentMonthIndex = monthlyData.findIndex((m) => m.month === currentMonth);
+  const excludeIndices = currentMonthIndex >= 0 ? [currentMonthIndex] : [];
+  
   // 1. Balanse (top row)
   const balanceValues = monthlyData.map((m) => m.balance);
-  const balanceStats = calculateStats(balanceValues);
+  const balanceStats = calculateStats(balanceValues, excludeIndices);
   rows.push({
     categoryId: '__balance',
     categoryName: 'Balanse',
@@ -205,14 +232,14 @@ export function buildCategoryRows(
   const incomeHk = hovedkategorier.find((hk) => hk.id === 'cat_inntekter_default' || hk.name === 'Inntekter');
   if (incomeHk) {
     const incomeValues = monthlyData.map((m) => m.income);
-    const incomeStats = calculateStats(incomeValues);
+    const incomeStats = calculateStats(incomeValues, excludeIndices);
     
     const incomeChildren: CategoryRowData[] = [];
     incomeHk.underkategorier?.forEach((ukId) => {
       const uk = underkategorier.find((u) => u.id === ukId);
       if (uk) {
         const ukValues = monthlyData.map((m) => m.byCategory[ukId] || 0);
-        const ukStats = calculateStats(ukValues);
+        const ukStats = calculateStats(ukValues, excludeIndices);
         incomeChildren.push({
           categoryId: ukId,
           categoryName: uk.name,
@@ -242,7 +269,7 @@ export function buildCategoryRows(
   );
   
   const expenseValues = monthlyData.map((m) => m.expenses);
-  const expenseStats = calculateStats(expenseValues);
+  const expenseStats = calculateStats(expenseValues, excludeIndices);
   
   const expenseChildren: CategoryRowData[] = [];
   
@@ -260,7 +287,7 @@ export function buildCategoryRows(
       }
       return total;
     });
-    const hkStats = calculateStats(hkValues);
+    const hkStats = calculateStats(hkValues, excludeIndices);
     
     // Build children
     const hkChildren: CategoryRowData[] = [];
@@ -268,7 +295,7 @@ export function buildCategoryRows(
       const uk = underkategorier.find((u) => u.id === ukId);
       if (uk) {
         const ukValues = monthlyData.map((m) => m.byCategory[ukId] || 0);
-        const ukStats = calculateStats(ukValues);
+        const ukStats = calculateStats(ukValues, excludeIndices);
         hkChildren.push({
           categoryId: ukId,
           categoryName: uk.name,
@@ -294,7 +321,7 @@ export function buildCategoryRows(
   
   // Add Ukategorisert as a separate expense category
   const uncategorizedValues = monthlyData.map((m) => m.uncategorized);
-  const uncategorizedStats = calculateStats(uncategorizedValues);
+  const uncategorizedStats = calculateStats(uncategorizedValues, excludeIndices);
   
   expenseChildren.push({
     categoryId: '__uncategorized',
@@ -319,14 +346,14 @@ export function buildCategoryRows(
   const savingsHk = hovedkategorier.find((hk) => hk.id === 'sparing');
   if (savingsHk) {
     const savingsValues = monthlyData.map((m) => m.savings);
-    const savingsStats = calculateStats(savingsValues);
+    const savingsStats = calculateStats(savingsValues, excludeIndices);
     
     const savingsChildren: CategoryRowData[] = [];
     savingsHk.underkategorier?.forEach((ukId) => {
       const uk = underkategorier.find((u) => u.id === ukId);
       if (uk) {
         const ukValues = monthlyData.map((m) => m.byCategory[ukId] || 0);
-        const ukStats = calculateStats(ukValues);
+        const ukStats = calculateStats(ukValues, excludeIndices);
         savingsChildren.push({
           categoryId: ukId,
           categoryName: uk.name,
