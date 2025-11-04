@@ -151,15 +151,17 @@ export function calculateMonthlyData(
       }
       
       // Check if transaction belongs to Savings category (separate, not counted as expense)
+      // Store NET amount (sum of all transactions including refunds)
       if (savingsSubcategoryIds.has(tx.categoryId)) {
-        savings += Math.abs(tx.beløp);
-        byCategory[tx.categoryId] = (byCategory[tx.categoryId] || 0) + Math.abs(tx.beløp);
+        savings -= tx.beløp; // Subtract because savings transactions are typically negative
+        byCategory[tx.categoryId] = (byCategory[tx.categoryId] || 0) - tx.beløp;
         return;
       }
       
       // All other categories are expenses
-      expenses += Math.abs(tx.beløp);
-      byCategory[tx.categoryId] = (byCategory[tx.categoryId] || 0) + Math.abs(tx.beløp);
+      // Store NET amount (sum of all transactions including refunds)
+      expenses -= tx.beløp; // Subtract because expense transactions are typically negative
+      byCategory[tx.categoryId] = (byCategory[tx.categoryId] || 0) - tx.beløp;
     });
     
     const balance = income - expenses;
