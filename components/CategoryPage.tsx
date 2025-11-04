@@ -366,11 +366,19 @@ const DeleteCategoryDialog: React.FC<DeleteCategoryDialogProps> = ({
 interface CategoryCardProps {
   hovedkategori: Hovedkategori;
   underkategorier: Underkategori[];
+  draggedUnderkategori: { id: string; currentHovedkategoriId: string } | null;
+  onDragStart: (underkategoriId: string, hovedkategoriId: string) => void;
+  onDragEnd: () => void;
+  onDrop: (targetHovedkategoriId: string) => void;
 }
 
 const CategoryCard: React.FC<CategoryCardProps> = ({
   hovedkategori,
   underkategorier,
+  draggedUnderkategori,
+  onDragStart,
+  onDragEnd,
+  onDrop,
 }) => {
   const [showNewSubcategory, setShowNewSubcategory] = useState(false);
   const [showBulkAdd, setShowBulkAdd] = useState(false);
@@ -378,6 +386,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingSubcategoryId, setEditingSubcategoryId] = useState<string | null>(null);
   const [deletingSubcategoryId, setDeletingSubcategoryId] = useState<string | null>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
 
   // Store actions
   const createUnderkategori = useTransactionStore((state) => state.createUnderkategori);
@@ -430,9 +439,46 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
     ? transactions.filter((t) => t.categoryId === deletingSubcategory.id).length
     : 0;
 
+  // Drag and drop handlers
+  const isValidDropTarget = 
+    draggedUnderkategori !== null && 
+    draggedUnderkategori.currentHovedkategoriId !== hovedkategori.id &&
+    hovedkategori.allowSubcategories !== false;
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Only show drag-over if this is a valid drop target
+    if (isValidDropTarget) {
+      setIsDragOver(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDropOnCard = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    
+    if (isValidDropTarget) {
+      onDrop(hovedkategori.id);
+    }
+  };
+
   return (
     <>
-      <Card>
+      <Card
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDropOnCard}
+        className={`${isDragOver && isValidDropTarget ? 'ring-4 ring-blue-400 bg-blue-50' : ''}`}
+      >
         <CardHeader>
           {/* Header with category name and actions */}
           <div className="flex items-center justify-between">
@@ -539,48 +585,66 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
           {/* Underkategorier list */}
           {underkategorier.length > 0 ? (
             <div className="space-y-2">
-              {underkategorier.map((underkategori) => (
-                <div
-                  key={underkategori.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
-                >
-                  {editingSubcategoryId === underkategori.id ? (
-                    <EditCategoryName
-                      currentName={underkategori.name}
-                      onCancel={() => setEditingSubcategoryId(null)}
-                      onSave={(name) => handleUpdateUnderkategori(underkategori.id, name)}
-                    />
-                  ) : (
-                    <>
-                      <span className="text-sm font-medium flex items-center gap-2">
-                        <span className="text-gray-400">└─</span>
-                        {underkategori.name}
-                      </span>
+              {underkategorier.map((underkategori) => {
+                const isDragging = draggedUnderkategori?.id === underkategori.id;
+                
+                return (
+                  <div
+                    key={underkategori.id}
+                    draggable={editingSubcategoryId !== underkategori.id}
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      onDragStart(underkategori.id, hovedkategori.id);
+                    }}
+                    onDragEnd={(e) => {
+                      e.stopPropagation();
+                      onDragEnd();
+                    }}
+                    className={`flex items-center justify-between p-3 rounded-md transition-all ${
+                      isDragging 
+                        ? 'opacity-50 bg-blue-100 cursor-grabbing scale-105' 
+                        : 'bg-gray-50 hover:bg-gray-100 cursor-grab'
+                    }`}
+                  >
+                    {editingSubcategoryId === underkategori.id ? (
+                      <EditCategoryName
+                        currentName={underkategori.name}
+                        onCancel={() => setEditingSubcategoryId(null)}
+                        onSave={(name) => handleUpdateUnderkategori(underkategori.id, name)}
+                      />
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium flex items-center gap-2">
+                          <span className="text-gray-400">✋</span>
+                          <span className="text-gray-400">└─</span>
+                          {underkategori.name}
+                        </span>
 
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setEditingSubcategoryId(underkategori.id)}
-                          className="h-8 w-8"
-                          title="Endre navn"
-                        >
-                          <span className="text-sm">✏️</span>
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeletingSubcategoryId(underkategori.id)}
-                          className="h-8 w-8"
-                          title="Slett underkategori"
-                        >
-                          <span className="text-sm">🗑️</span>
-                        </Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
+                        <div className="flex items-center gap-1">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setEditingSubcategoryId(underkategori.id)}
+                            className="h-8 w-8"
+                            title="Endre navn"
+                          >
+                            <span className="text-sm">✏️</span>
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setDeletingSubcategoryId(underkategori.id)}
+                            className="h-8 w-8"
+                            title="Slett underkategori"
+                          >
+                            <span className="text-sm">🗑️</span>
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             !showNewSubcategory && (
@@ -627,6 +691,10 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
   const [activePage] = useState('kategorier');
   const [showNewCategoryInput, setShowNewCategoryInput] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [draggedUnderkategori, setDraggedUnderkategori] = useState<{
+    id: string;
+    currentHovedkategoriId: string;
+  } | null>(null);
   
   const handleNavigate = (page: string) => {
     if (onNavigate) {
@@ -637,6 +705,7 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
   // Store state and actions
   const hovedkategorier = useTransactionStore(selectHovedkategorier);
   const createHovedkategori = useTransactionStore((state) => state.createHovedkategori);
+  const moveUnderkategori = useTransactionStore((state) => state.moveUnderkategori);
   const getHovedkategoriWithUnderkategorier = useTransactionStore(
     (state) => state.getHovedkategoriWithUnderkategorier
   );
@@ -661,6 +730,23 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
     }
   };
 
+  // Drag and drop handlers
+  const handleDragStart = (underkategoriId: string, currentHovedkategoriId: string) => {
+    setDraggedUnderkategori({ id: underkategoriId, currentHovedkategoriId });
+  };
+
+  const handleDragEnd = () => {
+    setDraggedUnderkategori(null);
+  };
+
+  const handleDrop = (targetHovedkategoriId: string) => {
+    if (draggedUnderkategori) {
+      console.log(`🔀 Moving underkategori ${draggedUnderkategori.id} to hovedkategori ${targetHovedkategoriId}`);
+      moveUnderkategori(draggedUnderkategori.id, targetHovedkategoriId);
+      setDraggedUnderkategori(null);
+    }
+  };
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
@@ -675,7 +761,19 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
             <p className="text-gray-600 mt-2">
               Administrer hovedkategorier og underkategorier for transaksjoner.
             </p>
+            <p className="text-sm text-blue-600 mt-1">
+              💡 Dra og slipp underkategorier mellom hovedkategorier for å flytte dem
+            </p>
           </div>
+
+          {/* Drag-in-progress indicator */}
+          {draggedUnderkategori && (
+            <div className="mb-4 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
+              <p className="text-sm font-medium text-blue-900">
+                ✋ Drar underkategori... Slipp på en annen hovedkategori for å flytte
+              </p>
+            </div>
+          )}
 
           {/* Add New Category Button */}
           <div className="mb-6">
@@ -729,6 +827,10 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
                     key={hovedkategori.id}
                     hovedkategori={hovedkategori}
                     underkategorier={underkategorier}
+                    draggedUnderkategori={draggedUnderkategori}
+                    onDragStart={handleDragStart}
+                    onDragEnd={handleDragEnd}
+                    onDrop={handleDrop}
                   />
                 );
               })}
