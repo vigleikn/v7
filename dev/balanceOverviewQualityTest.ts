@@ -474,21 +474,28 @@ function test3_StatisticalCalculations() {
   // Squared: [4900, 900, 400, 100, 2500]
   // Mean of squared differences: 8800 / 5 = 1760
   const expectedVariance = 1760;
+  // CV calculation:
+  // StdDev = sqrt(1760) ≈ 41.95
+  // CV = (41.95 / 170) * 100 ≈ 24.68%
+  const expectedCV = 24.7;
   
   console.log('\n✓ Testing calculateStats with values:', testValues);
   console.log(`   Sum: ${stats.sum} (expected ${expectedSum})`);
   console.log(`   Avg: ${stats.avg} (expected ${expectedAvg})`);
   console.log(`   Variance: ${stats.variance} (expected ${expectedVariance})`);
+  console.log(`   CV: ${stats.cv?.toFixed(1)}% (expected ~${expectedCV}%)`);
   
   const sumMatches = Math.abs(stats.sum - expectedSum) < 0.01;
   const avgMatches = Math.abs(stats.avg - expectedAvg) < 0.01;
-  const varianceMatches = Math.abs(stats.variance - expectedVariance) < 1; // Allow some floating point error
+  const varianceMatches = Math.abs(stats.variance - expectedVariance) < 1;
+  const cvMatches = stats.cv !== null && Math.abs(stats.cv - expectedCV) < 0.1;
   
   console.log(`   ${sumMatches ? '✓' : '✗'} Sum calculation correct`);
   console.log(`   ${avgMatches ? '✓' : '✗'} Average calculation correct`);
   console.log(`   ${varianceMatches ? '✓' : '✗'} Variance calculation correct`);
+  console.log(`   ${cvMatches ? '✓' : '✗'} CV calculation correct`);
   
-  const allPassed = sumMatches && avgMatches && varianceMatches;
+  const allPassed = sumMatches && avgMatches && varianceMatches && cvMatches;
   console.log(`\n${allPassed ? '✅ PASS' : '❌ FAIL'}: Statistical calculations\n`);
   return allPassed;
 }

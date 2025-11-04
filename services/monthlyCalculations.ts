@@ -26,6 +26,7 @@ export interface CategoryRowData {
   sum: number;
   avg: number;
   variance: number;
+  cv: number | null; // Coefficient of Variation (%) - null if avg = 0
   children?: CategoryRowData[];
 }
 
@@ -177,14 +178,14 @@ export function calculateMonthlyData(
 }
 
 /**
- * Calculate sum, average, and variance for an array of values
+ * Calculate sum, average, variance, and coefficient of variation for an array of values
  * @param values - Array of values to calculate stats for
  * @param excludeIndices - Optional array of indices to exclude from calculations (e.g., current month)
  */
 export function calculateStats(
   values: number[],
   excludeIndices: number[] = []
-): { sum: number; avg: number; variance: number } {
+): { sum: number; avg: number; variance: number; cv: number | null } {
   // Filter out excluded indices
   const filteredValues = values.filter((_, idx) => !excludeIndices.includes(idx));
   
@@ -197,7 +198,13 @@ export function calculateStats(
     ? squaredDiffs.reduce((acc, val) => acc + val, 0) / squaredDiffs.length 
     : 0;
   
-  return { sum, avg, variance };
+  // Calculate coefficient of variation (CV)
+  // CV = (standard deviation / mean) * 100
+  // Return null if average is 0 (to avoid division by zero)
+  const stdDev = Math.sqrt(variance);
+  const cv = avg !== 0 ? (stdDev / Math.abs(avg)) * 100 : null;
+  
+  return { sum, avg, variance, cv };
 }
 
 /**

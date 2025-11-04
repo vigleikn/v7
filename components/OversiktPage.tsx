@@ -241,9 +241,9 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
             {formatAmount(row.avg)}
           </td>
 
-          {/* Variance */}
+          {/* Coefficient of Variation (CV) */}
           <td className={`px-3 py-3 text-right tabular-nums text-gray-600 text-sm`}>
-            {formatAmount(Math.sqrt(row.variance))}
+            {row.cv !== null ? `${row.cv.toFixed(1)} %` : '–'}
           </td>
         </tr>
 
@@ -292,7 +292,7 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
                     Snitt
                   </th>
                   <th className="px-3 py-3 text-right font-semibold text-gray-700">
-                    Stdavvik
+                    Variasjon (%)
                   </th>
                 </tr>
               </thead>
@@ -383,10 +383,10 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
               <span className="font-semibold">Balanse:</span> Inntekter - Utgifter (ekskludert Sparing og Overført)
             </p>
             <p>
-              <span className="font-semibold">Sum/Snitt/Stdavvik:</span> Beregnet fra de siste 11 fullførte månedene (ekskluderer inneværende ufullstendige måned)
+              <span className="font-semibold">Sum/Snitt/Variasjon:</span> Beregnet fra de siste 11 fullførte månedene (ekskluderer inneværende ufullstendige måned)
             </p>
             <p>
-              <span className="font-semibold">Stdavvik:</span> Standardavvik viser variasjon i utgifter per måned
+              <span className="font-semibold">Variasjon (%):</span> Koeffisient av variasjon (CV) = standardavvik / gjennomsnitt × 100. Viser relativ variasjon uavhengig av beløpsstørrelse.
             </p>
             <p className="text-xs text-gray-500 mt-2">
               💡 Klikk på ►/▼ for å utvide/kollapse kategorier under Utgifter • Klikk på tall i tabellen for å se transaksjoner
