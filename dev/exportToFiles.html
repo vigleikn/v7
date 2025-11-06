@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <title>Export localStorage to Files</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #1a1a1a;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 10px 10px 10px 0;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    .info {
+      background: #eff6ff;
+      border-left: 4px solid #3b82f6;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .success {
+      background: #f0fdf4;
+      border-left: 4px solid #10b981;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .data {
+      background: #f9fafb;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 10px 0;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow: auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📦 Export localStorage til Filer</h1>
+    
+    <div class="info">
+      <strong>ℹ️ Info:</strong> Dette scriptet eksporterer all data fra localStorage til nedlastbare JSON-filer.<br>
+      Du kan deretter lagre disse i <code>/data/backups/</code> manuelt.
+    </div>
+
+    <button onclick="checkStorage()">1. Sjekk localStorage</button>
+    <button onclick="exportData()">2. Export Data (last ned JSON)</button>
+
+    <div id="output"></div>
+  </div>
+
+  <script>
+    function checkStorage() {
+      const output = document.getElementById('output');
+      const zustandData = localStorage.getItem('transaction-store');
+      const browserData = localStorage.getItem('transaction-app-data');
+
+      let html = '<div class="success"><strong>✅ localStorage funnet:</strong></div>';
+      
+      if (zustandData) {
+        const parsed = JSON.parse(zustandData);
+        const state = parsed.state || {};
+        
+        html += '<h3>Zustand Store (transaction-store):</h3>';
+        html += '<div class="data">';
+        html += `Transactions: ${state.transactions?.length || 0}<br>`;
+        html += `Hovedkategorier: ${state.hovedkategorier?.length || 0}<br>`;
+        html += `Underkategorier: ${state.underkategorier?.length || 0}<br>`;
+        html += `Rules: ${state.rules?.length || 0}<br>`;
+        html += `Locks: ${state.locks?.length || 0}<br>`;
+        html += `Budgets: ${state.budgets?.length || 0}<br>`;
+        html += `Start Balance: ${state.startBalance || 0} kr<br>`;
+        html += '</div>';
+      }
+      
+      if (browserData) {
+        const parsed = JSON.parse(browserData);
+        html += '<h3>Browser Persistence (transaction-app-data):</h3>';
+        html += '<div class="data">';
+        html += `Version: ${parsed.version}<br>`;
+        html += `Last Saved: ${new Date(parsed.lastSaved).toLocaleString('no')}<br>`;
+        html += `Transactions: ${parsed.transactions?.length || 0}<br>`;
+        html += `Hovedkategorier: ${parsed.hovedkategorier?.length || 0}<br>`;
+        html += '</div>';
+      }
+
+      if (!zustandData && !browserData) {
+        html = '<div class="info">⚠️ Ingen data funnet i localStorage</div>';
+      }
+
+      output.innerHTML = html;
+    }
+
+    function exportData() {
+      const zustandData = localStorage.getItem('transaction-store');
+      const browserData = localStorage.getItem('transaction-app-data');
+
+      if (!zustandData && !browserData) {
+        alert('⚠️ Ingen data funnet i localStorage');
+        return;
+      }
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5) + 'Z';
+      
+      // Export Zustand data
+      if (zustandData) {
+        const parsed = JSON.parse(zustandData);
+        const state = parsed.state || {};
+        
+        // Download each data type separately
+        downloadJSON(state.transactions || [], `transactions-${timestamp}.json`);
+        downloadJSON(state.hovedkategorier || [], `hovedkategorier-${timestamp}.json`);
+        downloadJSON(state.underkategorier || [], `underkategorier-${timestamp}.json`);
+        downloadJSON(state.rules || [], `rules-${timestamp}.json`);
+        downloadJSON(state.locks || [], `locks-${timestamp}.json`);
+        downloadJSON(state.budgets || [], `budgets-${timestamp}.json`);
+        
+        // Metadata
+        const metadata = {
+          version: '1.0.0',
+          exportedAt: new Date().toISOString(),
+          startBalance: state.startBalance || 0
+        };
+        downloadJSON(metadata, `metadata-${timestamp}.json`);
+      }
+
+      document.getElementById('output').innerHTML = 
+        '<div class="success"><strong>✅ Eksport fullført!</strong><br>Filer lastet ned. Lagre dem i <code>/data/backups/' + timestamp + '/</code></div>';
+    }
+
+    function downloadJSON(data, filename) {
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>
+

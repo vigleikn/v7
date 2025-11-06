@@ -2,13 +2,16 @@ import React, { useState, useEffect } from 'react';
 import { CategoryPage } from '../components/CategoryPage';
 import { TransactionPage } from '../components/TransactionPage';
 import { OversiktPage } from '../components/OversiktPage';
+import { BackupPage } from '../components/BackupPage';
 import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
 import { setupBrowserPersistence } from '../services/browserPersistence';
+import { setupAutoBackup } from '../services/autoBackup';
+import { runStoreMigration, logStoreStats } from '../services/storeMigration';
 import '../styles/globals.css';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'kategorier' | 'transaksjoner' | 'oversikt'>('transaksjoner');
+  const [currentPage, setCurrentPage] = useState<'kategorier' | 'transaksjoner' | 'oversikt' | 'backup'>('transaksjoner');
   const [isInitialized, setIsInitialized] = useState(false);
   const importTransactions = useTransactionStore((state) => state.importTransactions);
   const transactions = useTransactionStore((state) => state.transactions);
@@ -19,6 +22,16 @@ function App() {
     
     // Setup browser persistence (loads data + auto-save)
     const unsubscribe = setupBrowserPersistence();
+    
+    // Run store migration and cleanup (removes deprecated fields)
+    runStoreMigration();
+    
+    // Setup automatic daily backup
+    setupAutoBackup();
+    
+    // Log store statistics
+    logStoreStats();
+    
     setIsInitialized(true);
 
     // Cleanup on unmount
@@ -161,7 +174,7 @@ function App() {
   */
 
   const handleNavigate = (page: string) => {
-    if (page === 'kategorier' || page === 'transaksjoner' || page === 'oversikt') {
+    if (page === 'kategorier' || page === 'transaksjoner' || page === 'oversikt' || page === 'backup') {
       setCurrentPage(page);
     }
   };
@@ -173,6 +186,10 @@ function App() {
 
   if (currentPage === 'oversikt') {
     return <OversiktPage onNavigate={handleNavigate} />;
+  }
+
+  if (currentPage === 'backup') {
+    return <BackupPage onNavigate={handleNavigate} />;
   }
 
   return <TransactionPage onNavigate={handleNavigate} />;

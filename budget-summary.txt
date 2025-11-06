@@ -1,0 +1,90 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                     BUDSJETT-SIDE IMPLEMENTERT ✅                           ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📊 FUNKSJONALITET
+
+✅ Tabell med 12 måneder (kolonner) og kategorier (rader)
+✅ Redigerbare celler - Klikk edit-ikon, skriv beløp, Enter = lagre
+✅ Startbalanse - Redigerbar øverst på siden
+✅ Beregninger:
+   • Tilgjengelig for budsjett (per måned)
+   • Budsjettert totalt
+   • Utgifter (faktiske)
+   • Saldo (grønn = under budsjett, rød = over budsjett)
+✅ Collapsible kategorier - Klikk ►/▼ for å folde sammen/ut
+✅ Persistent storage - Alt lagres i localStorage via Zustand
+✅ Keyboard shortcuts:
+   • Enter = Lagre
+   • Escape = Avbryt
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎯 NAVIGASJON
+
+Sidebar: H, T, K, O, [B] ← NY!
+
+Klikk på 'B' i sidebar for å åpne Budsjett-siden
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🧪 TESTING
+
+Test suite: dev/budgetTest.ts
+
+Kjør: npx tsx dev/budgetTest.ts
+
+Resultat: ✅ All budget tests passed!
+
+Test coverage:
+  ✓ Start Balance
+  ✓ Set Budget
+  ✓ Get Budget
+  ✓ Update Budget
+  ✓ Delete Budget
+  ✓ Clear Budgets
+  ✓ Subcategory Budgets
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📂 FILER
+
+Nye:
+  • components/BudgetPage.tsx (404 linjer)
+  • dev/budgetTest.ts (217 linjer)
+  • BUDGET_FEATURE.md (fullstendig dokumentasjon)
+
+Endrede:
+  • src/store/state.ts (BudgetState interface)
+  • src/store/actions.ts (budget actions)
+  • src/store/index.ts (persistence)
+  • components/Sidebar.tsx ('B' menypunkt)
+  • demo/App.tsx (routing)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🚀 START APPEN
+
+npm run dev
+
+Åpne: http://localhost:5173
+Klikk på 'B' i sidebar
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 BRUK
+
+1. Sett startbalanse (f.eks. 50 000 kr)
+2. Hold musepekeren over en celle → Klikk edit-ikon
+3. Skriv budsjett-beløp
+4. Trykk Enter
+5. Se saldo-raden for å sjekke om du holder budsjettet (grønn = bra!)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ STATUS: FERDIG OG TESTET
+
+Build: ✅ Success (237.96 kB)
+Linter: ✅ No errors
+Tests: ✅ All passed
+

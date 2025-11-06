@@ -1,0 +1,89 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                    SHADCN/UI KOMPONENT-AUDIT SAMMENDRAG                     ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📊 STATUS: ⚠️  Delvis implementert - Forenklet versjon uten offisielle deps
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ KOMPONENTER I BRUK (shadcn-inspirert)
+
+components/ui/
+├── ✅ button.tsx       - Forenklet (uten cva)
+├── ✅ card.tsx         - Komplett
+├── ✅ table.tsx        - Tilpasset (px-2 spacing)
+├── ✅ input.tsx        - Standard
+├── ⚠️  select.tsx      - Native <select>, ikke Radix UI
+├── ⚠️  checkbox.tsx    - Native checkbox, ikke Radix UI
+├── ✅ textarea.tsx     - Standard
+└── ⚠️  alert-dialog.tsx - Custom modal, ikke Radix UI
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📦 BRUK AV KOMPONENTER
+
+TransactionPage.tsx:  ✅ Card, Button, Input, Select, Checkbox, Table
+CategoryPage.tsx:     ✅ Card, Button, Input, Textarea, AlertDialog
+OversiktPage.tsx:     ❌ Ingen shadcn/ui (kun custom HTML + Tailwind)
+Sidebar.tsx:          ❌ Ingen shadcn/ui (kun custom HTML + Tailwind)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+❌ MANGLENDE STANDARD SHADCN/UI DEPENDENCIES
+
+1. @radix-ui/*                    - Ingen Radix UI primitives
+2. class-variance-authority       - Variant-håndtering
+3. clsx                           - Conditional classnames
+4. tailwind-merge                 - Tailwind class merger
+5. lucide-react                   - ✅ FIKSET! (Nettopp installert)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎨 TAILWIND CONFIG
+
+✅ Følger shadcn conventions med design tokens:
+   - border, input, ring, background, foreground
+   - primary, secondary, destructive, muted, accent, card
+   - HSL color values (shadcn standard)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 KONKLUSJON
+
+Prosjektet bruker shadcn-INSPIRERTE komponenter, ikke offisielle shadcn/ui:
+
+✅ Design-system følger shadcn conventions (Tailwind tokens)
+✅ Komponent-API følger shadcn patterns  
+✅ lucide-react nå installert og klar
+❌ Ingen Radix UI primitives (lightweight versjon)
+❌ Ingen shadcn utilities (cva, cn, etc.)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+💡 FORDELER MED NÅVÆRENDE TILNÆRMING
+
+• Lightweight     - Ingen store dependencies (Radix UI er ~100KB)
+• Enkel           - Lettere å debugge og tilpasse
+• Rask            - Færre pakker å laste ned og bygge
+• Fleksibel       - Full kontroll over implementasjon
+
+⚠️  ULEMPER
+
+• Accessibility   - Native inputs har dårligere a11y enn Radix UI
+• Features        - Mangler avanserte features (portals, positioning)
+• Vedlikehold     - Må manuelt oppdatere komponenter
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🛠️  ANBEFALING
+
+✅ Hold nåværende lightweight tilnærming
+✅ lucide-react er nå installert
+✅ Dokumenter at dette er forenklet versjon
+⏸️  Oppgrader til full shadcn/ui kun hvis du trenger:
+   - Avansert accessibility
+   - Radix UI features (portals, positioning, focus management)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Se SHADCN_UI_AUDIT.md for fullstendig analyse
