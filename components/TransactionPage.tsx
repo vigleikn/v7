@@ -439,7 +439,7 @@ interface TransactionPageProps {
   onNavigate?: (page: string) => void;
 }
 
-type SortField = 'tekst' | 'beløp' | null;
+type SortField = 'tekst' | 'beløp' | 'dato' | null;
 type SortDirection = 'asc' | 'desc' | null;
 
 export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) => {
@@ -453,8 +453,8 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
   const itemsPerPage = 250;
   
   // Sorting state
-  const [sortField, setSortField] = useState<SortField>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [sortField, setSortField] = useState<SortField>('dato');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   
   // Local state for filters
   const [searchValue, setSearchValue] = useState('');
@@ -509,6 +509,25 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
 
   // Apply sorting to filtered transactions
   const sortedTransactions = React.useMemo(() => {
+    const toTimestamp = (dateStr: string): number => {
+      if (!dateStr) return 0;
+      if (dateStr.includes('.')) {
+        const parts = dateStr.split('.');
+        if (parts.length === 3) {
+          const [day, month, yearRaw] = parts;
+          const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
+          return new Date(
+            Number(year),
+            Number(month) - 1,
+            Number(day)
+          ).getTime();
+        }
+      } else if (dateStr.includes('-')) {
+        return new Date(dateStr).getTime();
+      }
+      return new Date(dateStr).getTime();
+    };
+
     if (!sortField || !sortDirection) {
       return filteredTransactions;
     }
@@ -522,6 +541,8 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
         comparison = a.tekst.localeCompare(b.tekst, 'no');
       } else if (sortField === 'beløp') {
         comparison = a.beløp - b.beløp;
+      } else if (sortField === 'dato') {
+        comparison = toTimestamp(a.dato) - toTimestamp(b.dato);
       }
       
       return sortDirection === 'asc' ? comparison : -comparison;
@@ -810,7 +831,23 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                     onChange={handleToggleSelectAll}
                   />
                 </TableHead>
-                <TableHead>Dato</TableHead>
+                <TableHead>
+                  <button
+                    onClick={() => handleSort('dato')}
+                    className="flex items-center gap-1 hover:text-gray-900 transition-colors"
+                  >
+                    Dato
+                    {sortField === 'dato' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="w-4 h-4" />
+                      ) : (
+                        <ArrowDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4 opacity-40" />
+                    )}
+                  </button>
+                </TableHead>
                 <TableHead>
                   <button
                     onClick={() => handleSort('beløp')}

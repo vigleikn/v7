@@ -34,7 +34,7 @@ Test suite: dev/budgetTest.ts
 
 Kjør: npx tsx dev/budgetTest.ts
 
-Resultat: ✅ All budget tests passed!
+Differanse: ✅ All budget tests passed!
 
 Test coverage:
   ✓ Start Balance

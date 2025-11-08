@@ -490,7 +490,7 @@ async function runEndToEndTest() {
   const searchFiltered = currentState.transactions.filter(tx =>
     tx.tekst.toLowerCase().includes('rema')
   );
-  console.log(`  Resultat: ${searchFiltered.length} transaksjoner`);
+  console.log(`  Differanse: ${searchFiltered.length} transaksjoner`);
   searchFiltered.forEach(tx => {
     console.log(`    - ${tx.dato} | ${tx.tekst}`);
   });
@@ -503,7 +503,7 @@ async function runEndToEndTest() {
   // Test type filter
   console.log('Test 2: Typefilter "Betaling"');
   const typeFiltered = currentState.transactions.filter(tx => tx.type === 'Betaling');
-  console.log(`  Resultat: ${typeFiltered.length} transaksjoner`);
+  console.log(`  Differanse: ${typeFiltered.length} transaksjoner`);
   
   if (typeFiltered.length === 3) {
     console.log('  ✅ SUKSESS: Typefilter fungerer');
@@ -515,7 +515,7 @@ async function runEndToEndTest() {
   const categoryFiltered = currentState.transactions.filter(
     tx => tx.categoryId === dagligvarerKategori?.id
   );
-  console.log(`  Resultat: ${categoryFiltered.length} transaksjoner`);
+  console.log(`  Differanse: ${categoryFiltered.length} transaksjoner`);
   categoryFiltered.forEach(tx => {
     console.log(`    - ${tx.dato} | ${tx.tekst}`);
   });
@@ -532,7 +532,7 @@ async function runEndToEndTest() {
     tx.type === 'Betaling' &&
     tx.categoryId === dagligvarerKategori?.id
   );
-  console.log(`  Resultat: ${combinedFiltered.length} transaksjoner`);
+  console.log(`  Differanse: ${combinedFiltered.length} transaksjoner`);
   
   if (combinedFiltered.length === 2) {
     console.log('  ✅ SUKSESS: Kombinerte filtre fungerer');

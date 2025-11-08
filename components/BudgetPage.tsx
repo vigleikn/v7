@@ -51,11 +51,6 @@ interface BudgetCell {
 
 interface BudgetRowView extends BudgetCategoryRow {
   monthly: BudgetCell[];
-  totals: {
-    budget: number;
-    actual: number;
-    saldo: number;
-  };
   children?: BudgetRowView[];
 }
 
@@ -157,15 +152,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
           const saldo = budget - actual;
           return { month, budget, actual, saldo };
         });
-        const totals = monthly.reduce(
-          (acc, cell) => ({
-            budget: acc.budget + cell.budget,
-            actual: acc.actual + cell.actual,
-            saldo: acc.saldo + cell.saldo,
-          }),
-          { budget: 0, actual: 0, saldo: 0 }
-        );
-        return { ...row, monthly, totals, children: childViews };
+        return { ...row, monthly, children: childViews };
       }
 
       const monthly = visibleMonths.map((month) => {
@@ -175,16 +162,8 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
         const saldo = budget - actual;
         return { month, budget, actual, saldo };
       });
-      const totals = monthly.reduce(
-        (acc, cell) => ({
-          budget: acc.budget + cell.budget,
-          actual: acc.actual + cell.actual,
-          saldo: acc.saldo + cell.saldo,
-        }),
-        { budget: 0, actual: 0, saldo: 0 }
-      );
 
-      return { ...row, monthly, totals };
+      return { ...row, monthly };
     },
     [budgetMap, spendingMap, visibleMonths]
   );
@@ -193,21 +172,6 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     () => categoryTree.map((row) => buildRowView(row)),
     [categoryTree, buildRowView]
   );
-
-  const summaryCells = useMemo(() => {
-    return visibleMonths.map((month, idx) => {
-      const budget = rowViews.reduce(
-        (sum, row) => sum + row.monthly[idx].budget,
-        0
-      );
-      const actual = rowViews.reduce(
-        (sum, row) => sum + row.monthly[idx].actual,
-        0
-      );
-      const saldo = budget - actual;
-      return { month, budget, actual, saldo };
-    });
-  }, [rowViews, visibleMonths]);
 
   const earliestDataMonth = useMemo(() => {
     const months: string[] = [];
@@ -428,10 +392,8 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
           {row.monthly.map((cell) => {
             const key = `${row.categoryId}|${cell.month}`;
             const isEditable = row.isEditable;
-            const actualColor =
-              cell.actual > cell.budget ? 'text-red-600' : 'text-gray-800';
-            const saldoColor =
-              cell.saldo >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold';
+            const actualClass = 'text-gray-800';
+            const saldoClass = 'text-gray-800 font-medium';
 
             return (
               <React.Fragment key={key}>
@@ -452,48 +414,21 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                     </span>
                   )}
                 </td>
-                <td className={`px-3 py-3 text-right align-middle text-sm ${actualColor}`}>
+                <td className={`px-3 py-3 text-right align-middle text-sm ${actualClass}`}>
                   {formatCurrency(cell.actual)}
                 </td>
-                <td className={`px-3 py-3 text-right align-middle text-sm ${saldoColor}`}>
+                <td className={`px-3 py-3 text-right align-middle text-sm ${saldoClass}`}>
                   {formatCurrency(cell.saldo)}
                 </td>
               </React.Fragment>
             );
           })}
-
-          <td className="px-3 py-3 text-right text-sm font-semibold text-gray-800 bg-gray-50">
-            {formatCurrency(row.totals.budget)}
-          </td>
-          <td
-            className={`px-3 py-3 text-right text-sm bg-gray-50 ${
-              row.totals.actual > row.totals.budget ? 'text-red-600 font-semibold' : 'text-gray-800'
-            }`}
-          >
-            {formatCurrency(row.totals.actual)}
-          </td>
-          <td
-            className={`px-3 py-3 text-right text-sm bg-gray-50 ${
-              row.totals.saldo >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold'
-            }`}
-          >
-            {formatCurrency(row.totals.saldo)}
-          </td>
         </tr>
 
         {hasChildren && isExpanded && row.children!.map((child) => renderRow(child, level + 1))}
       </React.Fragment>
     );
   };
-
-  const totalsRow = summaryCells.reduce(
-    (acc, cell) => ({
-      budget: acc.budget + cell.budget,
-      actual: acc.actual + cell.actual,
-      saldo: acc.saldo + cell.saldo,
-    }),
-    { budget: 0, actual: 0, saldo: 0 }
-  );
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -530,13 +465,6 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                   <p className="text-sm font-semibold text-gray-700">
                     {formatMonthHeader(month)}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    {summaryCells.find((c) => c.month === month)
-                      ? `Budsjett: ${formatCurrency(
-                          summaryCells.find((c) => c.month === month)!.budget
-                        )} kr`
-                      : ''}
-                  </p>
                 </div>
               ))}
             </div>
@@ -562,9 +490,6 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                       {formatMonthHeader(month)}
                     </th>
                   ))}
-                  <th colSpan={3} className="px-3 py-3 text-center font-semibold text-gray-700 bg-gray-50">
-                    Totalt
-                  </th>
                 </tr>
                 <tr>
                   {visibleMonths.map((month) => (
@@ -573,69 +498,18 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                         Budsjett
                       </th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                        Forbruk
+                        Faktisk
                       </th>
                       <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                        Saldo
+                        Differanse
                       </th>
                     </React.Fragment>
                   ))}
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 bg-gray-50">
-                    Budsjett
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 bg-gray-50">
-                    Forbruk
-                  </th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600 bg-gray-50">
-                    Saldo
-                  </th>
                 </tr>
               </thead>
               <tbody>
                 {rowViews.map((row) => renderRow(row))}
               </tbody>
-              <tfoot>
-                <tr className="bg-blue-50 border-t border-blue-200">
-                  <td className="px-4 py-3 font-semibold text-blue-900">Totalt</td>
-                  {summaryCells.map((cell) => {
-                    const saldoColor =
-                      cell.saldo >= 0 ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold';
-                    const actualColor =
-                      cell.actual > cell.budget ? 'text-red-600 font-semibold' : 'text-blue-900';
-
-                    return (
-                      <React.Fragment key={`summarycell-${cell.month}`}>
-                        <td className="px-3 py-3 text-right font-semibold text-blue-900">
-                          {formatCurrency(cell.budget)}
-                        </td>
-                        <td className={`px-3 py-3 text-right font-semibold ${actualColor}`}>
-                          {formatCurrency(cell.actual)}
-                        </td>
-                        <td className={`px-3 py-3 text-right ${saldoColor}`}>
-                          {formatCurrency(cell.saldo)}
-                        </td>
-                      </React.Fragment>
-                    );
-                  })}
-                  <td className="px-3 py-3 text-right font-semibold text-blue-900 bg-blue-100">
-                    {formatCurrency(totalsRow.budget)}
-                  </td>
-                  <td
-                    className={`px-3 py-3 text-right font-semibold bg-blue-100 ${
-                      totalsRow.actual > totalsRow.budget ? 'text-red-600' : 'text-blue-900'
-                    }`}
-                  >
-                    {formatCurrency(totalsRow.actual)}
-                  </td>
-                  <td
-                    className={`px-3 py-3 text-right font-semibold bg-blue-100 ${
-                      totalsRow.saldo >= 0 ? 'text-green-700' : 'text-red-600'
-                    }`}
-                  >
-                    {formatCurrency(totalsRow.saldo)}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
         </div>

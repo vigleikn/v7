@@ -61,27 +61,27 @@ export function buildBudgetCategoryTree(
 ): BudgetCategoryRow[] {
   const rows: BudgetCategoryRow[] = [];
 
-  const expenseHks = hovedkategorier
-    .filter(
-      (hk) =>
-        hk.id !== 'cat_inntekter_default' &&
-        hk.id !== 'sparing' &&
-        hk.id !== 'overfort'
-    )
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-
+  const sortedHks = [...hovedkategorier].sort((a, b) => a.sortOrder - b.sortOrder);
   const underMap = new Map<string, Underkategori>();
   underkategorier.forEach((uk) => underMap.set(uk.id, uk));
 
-  expenseHks.forEach((hk) => {
+  sortedHks.forEach((hk) => {
+    // Skip "Overført" categories from budgeting view
+    if (hk.id === 'overfort') {
+      return;
+    }
+
     const children: BudgetCategoryRow[] =
-      hk.underkategorier?.map((id) => underMap.get(id)).filter(Boolean).map((uk) => ({
-        categoryId: uk!.id,
-        categoryName: uk!.name,
-        level: 1,
-        isCollapsible: false,
-        isEditable: true,
-      })) ?? [];
+      hk.underkategorier
+        ?.map((id) => underMap.get(id))
+        .filter(Boolean)
+        .map((uk) => ({
+          categoryId: uk!.id,
+          categoryName: uk!.name,
+          level: 1,
+          isCollapsible: false,
+          isEditable: true,
+        })) ?? [];
 
     const hasChildren = children.length > 0;
 
@@ -95,14 +95,16 @@ export function buildBudgetCategoryTree(
     });
   });
 
-  // Append uncategorized
-  rows.push({
-    categoryId: '__uncategorized',
-    categoryName: 'Ukategorisert',
-    level: 0,
-    isCollapsible: false,
-    isEditable: true,
-  });
+  const hasUncategorized = rows.some((row) => row.categoryId === '__uncategorized');
+  if (!hasUncategorized) {
+    rows.push({
+      categoryId: '__uncategorized',
+      categoryName: 'Ukategorisert',
+      level: 0,
+      isCollapsible: false,
+      isEditable: true,
+    });
+  }
 
   return rows;
 }
@@ -144,7 +146,7 @@ export function computeMonthlySpending(
 
     const key = `${categoryId}|${month}`;
     const value = result.get(key) ?? 0;
-    const delta = -tx.beløp; // beløp negative for expenses
+    const delta = Math.abs(tx.beløp);
     result.set(key, value + delta);
   });
 

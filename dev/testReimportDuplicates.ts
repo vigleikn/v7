@@ -110,7 +110,7 @@ async function testReimportDuplicates() {
 
   logSection('Oppsummering');
   
-  console.log('\n📊 Resultat:');
+  console.log('\n📊 Differanse:');
   console.log(`  • First import: ${parseResult1.originalCount} transaksjoner importert`);
   console.log(`  • Second import: ${duplicates.length} duplikater funnet`);
   console.log(`  • Second import: ${unique.length} nye transaksjoner`);

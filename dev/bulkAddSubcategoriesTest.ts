@@ -128,7 +128,7 @@ function test2_BulkAddWithInvalidInput(forbrukId: string) {
   const newCount = forbrukAfter?.underkategorier.length || 0;
   const added = newCount - existingCount;
   
-  logInfo(`\nResultat:`);
+  logInfo(`\nDifferanse:`);
   logInfo(`  Før: ${existingCount} underkategorier`);
   logInfo(`  Etter: ${newCount} underkategorier`);
   logInfo(`  Lagt til: ${added} underkategorier`);
@@ -201,7 +201,7 @@ function test3_BulkAddOnSparing() {
   const newCount = sparingAfter?.underkategorier.length || 0;
   const added = newCount - existingCount;
   
-  logInfo(`\nResultat:`);
+  logInfo(`\nDifferanse:`);
   logInfo(`  Før: ${existingCount} underkategorier`);
   logInfo(`  Etter: ${newCount} underkategorier`);
   logInfo(`  Lagt til: ${added} underkategorier`);
@@ -325,7 +325,7 @@ function test5_LargeBulkAdd() {
   const utgifterAfter = afterAdd.hovedkategorier.get(utgifter.id);
   const createdCount = utgifterAfter?.underkategorier.length || 0;
   
-  logInfo(`Resultat: ${createdCount} underkategorier opprettet`);
+  logInfo(`Differanse: ${createdCount} underkategorier opprettet`);
   
   if (createdCount >= 16 && createdCount <= 18) {
     logSuccess(`Riktig antall opprettet (${createdCount})`);
@@ -386,7 +386,7 @@ function test6_PreservingExisting(forbrukId: string | null) {
   const countAfter = forbrukAfter?.underkategorier.length || 0;
   const added = countAfter - countBefore;
   
-  logInfo(`\nResultat: ${added} nye underkategorier lagt til`);
+  logInfo(`\nDifferanse: ${added} nye underkategorier lagt til`);
   
   if (added === 2) {
     logSuccess('Kun de 2 nye ble lagt til (eksisterende ble ignorert)');
