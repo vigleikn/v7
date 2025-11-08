@@ -45,6 +45,8 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
   const underkategorier = useTransactionStore((state) => state.underkategorier);
   const rules = useTransactionStore((state) => state.rules);
 
+  const formatNumber = (value: number) => Math.round(value).toLocaleString('no');
+
   const handleNavigate = (page: string) => {
     if (onNavigate) {
       onNavigate(page);
@@ -433,6 +435,20 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
                       <span className="text-gray-600">Regler:</span>
                       <span className="font-medium">
                         {previewData.metadata.ruleCount.toLocaleString('no')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Budsjetter:</span>
+                      <span className="font-medium">
+                        {(previewData.data.budgets?.length ?? 0).toLocaleString('no')}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Startbalanse:</span>
+                      <span className="font-medium">
+                        {previewData.data.startBalance
+                          ? `${formatNumber(previewData.data.startBalance.amount)} kr (${previewData.data.startBalance.date})`
+                          : 'Ikke satt'}
                       </span>
                     </div>
                   </div>

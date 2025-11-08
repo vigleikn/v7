@@ -26,7 +26,7 @@ export interface BackupData {
     rules: any[];
     locks: any[];
     budgets: any[];
-    startBalance: number;
+    startBalance: { amount: number; date: string } | null;
   };
   metadata: {
     transactionCount: number;
@@ -92,12 +92,17 @@ export function createBackupData(): BackupData {
   
   // Only include budgets if they exist and are valid
   let budgets: any[] = [];
-  let startBalance = 0;
+  let startBalance: { amount: number; date: string } | null = null;
   
   if (state.budgets && typeof state.budgets === 'object' && 'entries' in state.budgets) {
     try {
       budgets = Array.from(state.budgets.entries());
-      startBalance = state.startBalance || 0;
+      if (state.startBalance && Number.isFinite(state.startBalance.amount)) {
+        startBalance = {
+          amount: Math.round(Number(state.startBalance.amount)),
+          date: state.startBalance.date,
+        };
+      }
     } catch (error) {
       console.warn('⚠️  Could not export budgets:', error);
     }
@@ -255,7 +260,12 @@ export function restoreFromBackup(backupData: BackupData): { success: boolean; e
     // Only update budgets if the store supports it
     if ('budgets' in currentState) {
       stateUpdate.budgets = budgets;
-      stateUpdate.startBalance = backupData.data.startBalance || 0;
+      stateUpdate.startBalance = backupData.data.startBalance
+        ? {
+            amount: Math.round(Number(backupData.data.startBalance.amount)),
+            date: backupData.data.startBalance.date,
+          }
+        : null;
     }
 
     useTransactionStore.setState(stateUpdate);

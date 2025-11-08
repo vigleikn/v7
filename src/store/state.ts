@@ -62,6 +62,17 @@ export interface TransactionSelectionState {
 }
 
 // ============================================================================
+// Budget & Start Balance Types
+// ============================================================================
+
+export interface StartBalanceState {
+  amount: number;
+  date: string; // ISO date string (YYYY-MM-DD)
+}
+
+export type BudgetKey = string; // `${categoryId}|${month}`
+
+// ============================================================================
 // Store State Interface
 // ============================================================================
 
@@ -77,6 +88,10 @@ export interface TransactionStoreState {
   // Rule Engine State
   rules: Map<string, CategoryRule>;
   locks: Map<string, TransactionLock>;
+
+  // Budgeting
+  budgets: Map<BudgetKey, number>;
+  startBalance: StartBalanceState | null;
   
   // UI State
   filters: TransactionFilters;
@@ -157,6 +172,13 @@ export interface TransactionStoreActions {
   setError: (error: string | null) => void;
   reset: () => void;
   
+  // Budget Actions
+  setBudget: (categoryId: string, month: string, amount: number) => void;
+  getBudget: (categoryId: string, month: string) => number;
+  clearBudget: (categoryId?: string) => void;
+  setStartBalance: (payload: StartBalanceState | null) => void;
+  getStartBalance: () => StartBalanceState | null;
+
   // Selectors (derived state)
   getHovedkategoriWithUnderkategorier: (id: string) => {
     hovedkategori: Hovedkategori;

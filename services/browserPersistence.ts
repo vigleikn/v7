@@ -33,6 +33,8 @@ interface PersistedData {
   underkategorier: Array<[string, Underkategori]>;
   rules: Array<[string, any]>;
   locks: Array<[string, any]>;
+  budgets: Array<[string, number]>;
+  startBalance: { amount: number; date: string } | null;
 }
 
 // ============================================================================
@@ -102,6 +104,10 @@ export function saveToBrowser(): void {
       key,
       serializeDates(lock),
     ]),
+    budgets: state.budgets ? Array.from(state.budgets.entries()) : [],
+    startBalance: state.startBalance
+      ? { amount: Math.round(Number(state.startBalance.amount)), date: state.startBalance.date }
+      : null,
   };
 
   try {
@@ -180,6 +186,23 @@ export function loadFromBrowser(): boolean {
       console.log(`✓ Loaded ${data.locks.length} locks`);
     }
 
+    // Load budgets
+    useTransactionStore.setState((state) => {
+      const budgets = data.budgets ? new Map(data.budgets) : new Map();
+      return { ...state, budgets };
+    });
+
+    // Load start balance
+    useTransactionStore.setState((state) => ({
+      ...state,
+      startBalance: data.startBalance
+        ? {
+            amount: Math.round(Number(data.startBalance.amount)),
+            date: data.startBalance.date,
+          }
+        : null,
+    }));
+
     // Re-apply rules for consistency
     state.applyRulesToAll();
 
@@ -221,7 +244,9 @@ export function setupBrowserAutoSave(): () => void {
       state.hovedkategorier !== prevState.hovedkategorier ||
       state.underkategorier !== prevState.underkategorier ||
       state.rules !== prevState.rules ||
-      state.locks !== prevState.locks;
+      state.locks !== prevState.locks ||
+      state.budgets !== prevState.budgets ||
+      state.startBalance !== prevState.startBalance;
 
     if (hasChanges) {
       // Debounce saves

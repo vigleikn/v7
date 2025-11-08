@@ -27,6 +27,7 @@ import {
   BulkUpdatePayload,
   TransactionStoreState,
   TransactionStoreActions,
+  StartBalanceState,
   initialFilters,
   initialSelection,
   initialStats,
@@ -738,12 +739,85 @@ export function createActions(
         filteredTransactions: [],
         rules: new Map(),
         locks: new Map(),
+        budgets: new Map(),
+        startBalance: null,
         filters: initialFilters,
         selection: initialSelection,
         isLoading: false,
         error: null,
         stats: initialStats,
       });
+    },
+
+    // ====================================================================
+    // Budget Actions
+    // ====================================================================
+
+    setBudget: (categoryId, month, amount) => {
+      if (!categoryId || !month) return;
+
+      const normalizedMonth = month.slice(0, 7);
+      const key = `${categoryId}|${normalizedMonth}`;
+
+      set((state: TransactionStoreState) => {
+        if (!state.budgets) {
+          state.budgets = new Map();
+        }
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+          state.budgets.delete(key);
+        } else {
+          state.budgets.set(key, Math.round(amount));
+        }
+      });
+    },
+
+    getBudget: (categoryId, month) => {
+      const state = get();
+      if (!state.budgets) return 0;
+
+      const normalizedMonth = month.slice(0, 7);
+      const key = `${categoryId}|${normalizedMonth}`;
+      const value = state.budgets.get(key);
+
+      return value ?? 0;
+    },
+
+    clearBudget: (categoryId) => {
+      set((state: TransactionStoreState) => {
+        if (!state.budgets) {
+          state.budgets = new Map();
+          return;
+        }
+
+        if (!categoryId) {
+          state.budgets.clear();
+          return;
+        }
+
+        const prefix = `${categoryId}|`;
+        Array.from(state.budgets.keys()).forEach((key) => {
+          if (key.startsWith(prefix)) {
+            state.budgets.delete(key);
+          }
+        });
+      });
+    },
+
+    setStartBalance: (payload) => {
+      set((state: TransactionStoreState) => {
+        state.startBalance = payload
+          ? {
+              amount: Math.round(payload.amount),
+              date: payload.date.slice(0, 10),
+            }
+          : null;
+      });
+    },
+
+    getStartBalance: () => {
+      const state = get();
+      return state.startBalance ? { ...state.startBalance } : null;
     },
     
     // ====================================================================

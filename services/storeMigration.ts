@@ -10,46 +10,81 @@ import { useTransactionStore } from '../src/store';
 // ============================================================================
 
 /**
- * Remove deprecated budget fields from store
+ * Ensure budget fields exist with correct structure
  */
-export function removeBudgetFields(): void {
+export function ensureBudgetFields(): void {
   const state = useTransactionStore.getState();
   
-  console.log('🔍 Checking for deprecated budget fields...');
+  console.log('🔍 Normalizing budget fields...');
   
-  // Check if budget fields exist
-  const hasBudgets = 'budgets' in state;
-  const hasStartBalance = 'startBalance' in state;
-  
-  if (hasBudgets || hasStartBalance) {
-    console.log('⚠️  Found deprecated budget fields:');
-    if (hasBudgets) {
-      console.log(`   - budgets: ${typeof state.budgets}`);
+  // Normalize budgets map
+  if (!state.budgets || !(state.budgets instanceof Map)) {
+    const rawBudgets: Record<string, number> | Array<[string, number]> | undefined =
+      (state as any).budgets;
+    
+    const normalized = new Map<string, number>();
+    
+    if (Array.isArray(rawBudgets)) {
+      rawBudgets.forEach(([key, value]) => {
+        if (typeof key === 'string' && Number.isFinite(value)) {
+          normalized.set(key, Math.round(Number(value)));
+        }
+      });
+    } else if (rawBudgets && typeof rawBudgets === 'object') {
+      Object.entries(rawBudgets).forEach(([key, value]) => {
+        if (Number.isFinite(value)) {
+          normalized.set(key, Math.round(Number(value)));
+        }
+      });
     }
-    if (hasStartBalance) {
-      console.log(`   - startBalance: ${state.startBalance}`);
-    }
     
-    // Remove from store state (Zustand will handle localStorage)
-    const currentState = useTransactionStore.getState();
-    const cleanState: any = { ...currentState };
-    
-    delete cleanState.budgets;
-    delete cleanState.startBalance;
-    delete cleanState.setBudget;
-    delete cleanState.getBudget;
-    delete cleanState.setStartBalance;
-    delete cleanState.clearBudgets;
-    
-    console.log('🧹 Cleaning up budget fields...');
-    // Note: We can't directly delete from state, but we can ensure they're not persisted
+    useTransactionStore.setState({ budgets: normalized });
+    console.log(`✅ Budgets normalized (${normalized.size} entries)`);
   } else {
-    console.log('✅ No deprecated budget fields found');
+    // Ensure numeric values
+    const sanitized = new Map<string, number>();
+    state.budgets.forEach((value, key) => {
+      if (typeof key === 'string' && Number.isFinite(value)) {
+        sanitized.set(key, Math.round(Number(value)));
+      }
+    });
+    if (sanitized.size !== state.budgets.size) {
+      useTransactionStore.setState({ budgets: sanitized });
+      console.log(`✅ Budgets sanitized (${sanitized.size} entries)`);
+    }
   }
+
+  // Normalize start balance
+  const rawStartBalance = (state as any).startBalance;
+  if (!rawStartBalance) {
+    useTransactionStore.setState({ startBalance: null });
+    console.log('ℹ️  No start balance set');
+    return;
+  }
+
+  const amount = Number(rawStartBalance.amount);
+  const date =
+    typeof rawStartBalance.date === 'string'
+      ? rawStartBalance.date.slice(0, 10)
+      : '';
+
+  if (!Number.isFinite(amount) || !date) {
+    useTransactionStore.setState({ startBalance: null });
+    console.log('⚠️  Invalid start balance detected - resetting');
+    return;
+  }
+
+  useTransactionStore.setState({
+    startBalance: {
+      amount: Math.round(amount),
+      date,
+    },
+  });
+  console.log(`✅ Start balance normalized (${amount} kr @ ${date})`);
 }
 
 /**
- * Cleanup localStorage from deprecated fields
+ * Cleanup / normalize localStorage for budget fields
  */
 export function cleanupLocalStorage(): void {
   if (typeof window === 'undefined' || !window.localStorage) {
@@ -70,25 +105,46 @@ export function cleanupLocalStorage(): void {
     if (parsed.state) {
       let needsCleanup = false;
       
-      // Check for budget fields
+      // Normalize budget fields
       if ('budgets' in parsed.state) {
-        console.log('⚠️  Found budgets in localStorage');
-        delete parsed.state.budgets;
-        needsCleanup = true;
+        const rawBudgets = parsed.state.budgets;
+        if (Array.isArray(rawBudgets)) {
+          // Already ok
+        } else if (rawBudgets && typeof rawBudgets === 'object') {
+          parsed.state.budgets = Object.entries(rawBudgets);
+          needsCleanup = true;
+          console.log('ℹ️  Converted budgets object to entries array');
+        } else {
+          parsed.state.budgets = [];
+          needsCleanup = true;
+          console.log('ℹ️  Reset invalid budgets structure');
+        }
       }
-      
+
       if ('startBalance' in parsed.state) {
-        console.log('⚠️  Found startBalance in localStorage');
-        delete parsed.state.startBalance;
-        needsCleanup = true;
+        const rawStartBalance = parsed.state.startBalance;
+        if (
+          !rawStartBalance ||
+          !Number.isFinite(rawStartBalance.amount) ||
+          typeof rawStartBalance.date !== 'string'
+        ) {
+          parsed.state.startBalance = null;
+          needsCleanup = true;
+          console.log('ℹ️  Reset invalid start balance in localStorage');
+        } else {
+          parsed.state.startBalance = {
+            amount: Math.round(Number(rawStartBalance.amount)),
+            date: rawStartBalance.date.slice(0, 10),
+          };
+        }
       }
       
       if (needsCleanup) {
-        console.log('🧹 Cleaning localStorage...');
+        console.log('🧹 Updating localStorage with normalized fields...');
         localStorage.setItem('transaction-store', JSON.stringify(parsed));
-        console.log('✅ localStorage cleaned');
+        console.log('✅ localStorage normalized');
       } else {
-        console.log('✅ localStorage is clean');
+        console.log('✅ localStorage budget fields already normalized');
       }
     }
   } catch (error) {
@@ -130,15 +186,10 @@ export function validateStoreState(): {
     errors.push('Missing or invalid locks Map');
   }
   
-  // Check for deprecated fields
-  if ('budgets' in state) {
-    warnings.push('Deprecated field "budgets" found in state');
+  if (!state.budgets || !(state.budgets instanceof Map)) {
+    errors.push('Missing budgets map');
   }
-  
-  if ('startBalance' in state) {
-    warnings.push('Deprecated field "startBalance" found in state');
-  }
-  
+
   return {
     valid: errors.length === 0,
     errors,
@@ -173,8 +224,8 @@ export function runStoreMigration(): void {
   console.log('\n🧹 Cleanup Phase:');
   cleanupLocalStorage();
   
-  // 3. Remove deprecated fields
-  removeBudgetFields();
+  // 3. Normalize budget fields
+  ensureBudgetFields();
   
   console.log('\n' + '='.repeat(70));
   console.log('✅ Migration complete\n');

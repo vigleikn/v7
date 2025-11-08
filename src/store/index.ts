@@ -65,6 +65,8 @@ export const useTransactionStore = create<TransactionStore>()(
         filteredTransactions: [],
         rules: new Map(),
         locks: new Map(),
+        budgets: new Map(),
+        startBalance: null,
         filters: initialFilters,
         selection: initialSelection,
         isLoading: false,
@@ -97,6 +99,23 @@ export const useTransactionStore = create<TransactionStore>()(
               if (parsed.state.locks && Array.isArray(parsed.state.locks)) {
                 parsed.state.locks = new Map(parsed.state.locks);
               }
+              if (parsed.state.budgets && Array.isArray(parsed.state.budgets)) {
+                parsed.state.budgets = new Map(parsed.state.budgets);
+              } else if (!parsed.state.budgets) {
+                parsed.state.budgets = new Map();
+              }
+              if (parsed.state.startBalance) {
+                const { amount, date } = parsed.state.startBalance;
+                parsed.state.startBalance = {
+                  amount: typeof amount === 'number' ? amount : 0,
+                  date: typeof date === 'string' ? date.slice(0, 10) : '',
+                };
+                if (!parsed.state.startBalance.date) {
+                  parsed.state.startBalance = null;
+                }
+              } else {
+                parsed.state.startBalance = null;
+              }
             }
             
             return parsed;
@@ -113,6 +132,8 @@ export const useTransactionStore = create<TransactionStore>()(
           underkategorier: Array.from(state.underkategorier.entries()),
           rules: Array.from(state.rules.entries()),
           locks: Array.from(state.locks.entries()),
+          budgets: Array.from(state.budgets.entries()),
+          startBalance: state.startBalance,
         }),
       }
     ),

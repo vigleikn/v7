@@ -33,7 +33,10 @@ Komplett backup/restore system som sikrer brukerdata mot tap. Systemet inkludere
     "rules": [...],
     "locks": [...],
     "budgets": [...],
-    "startBalance": 0
+    "startBalance": {
+      "amount": 100000,
+      "date": "2025-11-01"
+    }
   },
   "metadata": {
     "transactionCount": 1234,

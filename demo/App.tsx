@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CategoryPage } from '../components/CategoryPage';
 import { TransactionPage } from '../components/TransactionPage';
 import { OversiktPage } from '../components/OversiktPage';
+import { BudgetPage } from '../components/BudgetPage';
 import { BackupPage } from '../components/BackupPage';
 import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
@@ -11,7 +12,9 @@ import { runStoreMigration, logStoreStats } from '../services/storeMigration';
 import '../styles/globals.css';
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<'kategorier' | 'transaksjoner' | 'oversikt' | 'backup'>('transaksjoner');
+  const [currentPage, setCurrentPage] = useState<
+    'kategorier' | 'transaksjoner' | 'oversikt' | 'budsjett' | 'backup'
+  >('transaksjoner');
   const [isInitialized, setIsInitialized] = useState(false);
   const importTransactions = useTransactionStore((state) => state.importTransactions);
   const transactions = useTransactionStore((state) => state.transactions);
@@ -174,7 +177,13 @@ function App() {
   */
 
   const handleNavigate = (page: string) => {
-    if (page === 'kategorier' || page === 'transaksjoner' || page === 'oversikt' || page === 'backup') {
+    if (
+      page === 'kategorier' ||
+      page === 'transaksjoner' ||
+      page === 'oversikt' ||
+      page === 'budsjett' ||
+      page === 'backup'
+    ) {
       setCurrentPage(page);
     }
   };
@@ -186,6 +195,10 @@ function App() {
 
   if (currentPage === 'oversikt') {
     return <OversiktPage onNavigate={handleNavigate} />;
+  }
+
+  if (currentPage === 'budsjett') {
+    return <BudgetPage onNavigate={handleNavigate} />;
   }
 
   if (currentPage === 'backup') {

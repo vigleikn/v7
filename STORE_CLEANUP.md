@@ -23,8 +23,8 @@ Automatisk cleanup ved app-oppstart:
 ```typescript
 runStoreMigration()
   ├── validateStoreState()       // Sjekk validitet
-  ├── cleanupLocalStorage()      // Fjern deprecated fields
-  └── removeBudgetFields()       // Clean state
+  ├── cleanupLocalStorage()      // Normaliser lagrede felt
+  └── ensureBudgetFields()       // Sikrer Map + startbalanse
 ```
 
 #### Funksjoner:
@@ -36,13 +36,13 @@ runStoreMigration()
 
 **`cleanupLocalStorage()`**
 - Parser `transaction-store` fra localStorage
-- Fjerner `budgets` og `startBalance` felter
-- Lagrer tilbake ren state
+- Konverterer gamle objekter til `[key, value]` arrays
+- Normaliserer `startBalance` struktur
 
-**`removeBudgetFields()`**
-- Sjekker om budget-felter eksisterer i state
-- Logger hva som fjernes
-- Dokumenterer cleanup
+**`ensureBudgetFields()`**
+- Sikrer at `budgets` er `Map<string, number>`
+- Validerer/normaliserer `startBalance`
+- Logger resultat og korrigerer feil
 
 **`getStoreStats()`**
 - Returnerer statistikk (antall transaksjoner, kategorier, etc.)

@@ -43,28 +43,22 @@ function testStoreMigration() {
   console.log(`   Categorized: ${stats.categorized}`);
   console.log(`   Storage: ${(stats.storageSize / 1024).toFixed(2)} KB`);
   
-  // Test 3: Check for budget fields
-  console.log('\n✓ Test 3: Check for Budget Fields');
+  // Test 3: Check budget structures
+  console.log('\n✓ Test 3: Budget Structure');
   const state = useTransactionStore.getState();
   
-  const hasBudgets = 'budgets' in state;
-  const hasStartBalance = 'startBalance' in state;
+  const hasBudgets = state.budgets instanceof Map;
+  const startBalanceValid =
+    !state.startBalance ||
+    (typeof state.startBalance.amount === 'number' &&
+      typeof state.startBalance.date === 'string');
   
-  console.log(`   Has budgets: ${hasBudgets ? '⚠️  YES (should be removed)' : '✅ NO'}`);
-  console.log(`   Has startBalance: ${hasStartBalance ? '⚠️  YES (should be removed)' : '✅ NO'}`);
+  console.log(`   Budgets map present: ${hasBudgets ? '✅ YES' : '❌ NO'}`);
+  console.log(`   Start balance structure: ${startBalanceValid ? '✅ OK' : '❌ INVALID'}`);
   
-  if (hasBudgets || hasStartBalance) {
-    console.log('\n   ⚠️  Deprecated fields found! Running cleanup...');
+  if (!hasBudgets || !startBalanceValid) {
+    console.log('\n   ⚠️  Running migration to normalize budget fields...');
     runStoreMigration();
-    
-    // Re-check after cleanup
-    const stateAfter = useTransactionStore.getState();
-    const hasBudgetsAfter = 'budgets' in stateAfter;
-    const hasStartBalanceAfter = 'startBalance' in stateAfter;
-    
-    console.log('\n   After cleanup:');
-    console.log(`   Has budgets: ${hasBudgetsAfter ? '❌ STILL THERE' : '✅ REMOVED'}`);
-    console.log(`   Has startBalance: ${hasStartBalanceAfter ? '❌ STILL THERE' : '✅ REMOVED'}`);
   }
   
   // Test 4: Cleanup localStorage
@@ -81,6 +75,8 @@ function testStoreMigration() {
     'locks',
     'filters',
     'selection',
+    'budgets',
+    'startBalance',
   ];
   
   requiredFields.forEach((field) => {

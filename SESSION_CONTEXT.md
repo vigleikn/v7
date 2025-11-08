@@ -1,117 +1,63 @@
-# Kontekst fra forrige økt - Norwegian Transaction Management System
+# Kontekst fra forrige økt – Norwegian Transaction Management System
 
-## Gjennomførte endringer i denne økten:
+## Gjennomførte endringer
 
-### 1. UI-forbedringer
-- **Sidebar**: Endret til 90px bred med bokstavknapper (H, T, K)
-- **Fjernet**: Header-tekst og footer fra sidebar
-- **Tabellspacing**: Redusert gap mellom kolonner med 50% (px-4 → px-2)
-- **Max bredde**: Økt til 1600px for bedre visning
-- **Datoformat**: Endret til norsk kort format (dd.mm.yy)
+### 1. Budsjett-side (NY)
+- Egen side `B` i sidebaren (3-måneders vindu med back/forward-knapper)
+- Viser alle hoved- og underkategorier + `Ukategorisert`
+- Kolonner per måned: **Budsjett** (input), **Forbruk** (faktisk), **Saldo** (gjenstående)
+- Summerer totals per kategori og globalt
+- Viser akkumulert kontosaldo basert på startbalanse + netto transaksjoner
+- Modal for å sette startbalanse med datovelger
 
-### 2. Tabellkolonner
-- **Lagt til**: 4 nye CSV-kolonner (Til konto, Til kontonummer, Fra konto, Fra kontonummer)
-- **Omorganisert**: Flyttet Underkategori og Kategori etter Tekst-kolonnen
-- **Kategori-kolonne**: max-width 12rem
-- **Kolonnerekkefølge nå**: Checkbox, Dato, Beløp, Type, Tekst, Underkategori, Kategori, Til konto, Til kontonummer, Fra konto, Fra kontonummer
+### 2. Zustand store
+- Lagt til `budgets: Map<string, number>` (nøkkel: `categoryId|YYYY-MM`)
+- Lagt til `startBalance: { amount: number; date: string } | null`
+- Nye actions: `setBudget`, `getBudget`, `clearBudget`, `setStartBalance`, `getStartBalance`
+- Persist oppdatert til å lagre/rehydrere budgets + startBalance
+- `runStoreMigration()` normaliserer gamle data (konverterer arrays/objekter til Map, validerer startbalanse)
 
-### 3. Kategoristyring
-- **Auto-regel**: Fjernet dialogboks "Vil du lage en regel..." - regler opprettes automatisk
-- **Dropdown-logikk**: Hovedkategorier med underkategorier skjules (kun underkategorier vises)
-- **Unntak**: Overført og Sparing kan tilordnes direkte (ingen underkategorier)
-- **Alfabetisk sortering**: Kategorier sorteres alfabetisk i dropdown (norsk locale)
-- **Ingen bullets**: Fjernet "└─" og "•" fra kategorinavn i dropdown
-- **Validering**: Backend-validering i categorizeTransactionAction og bulkCategorize
-- **Cleanup**: `fixInvalidCategorizations()` funksjon for å rydde feilaktig kategoriserte transaksjoner
+### 3. Beregninger
+- Ny helper `services/budgetCalculations.ts`:
+  - Genererer månedsekvenser (`getMonthSequence`, `shiftMonth`)
+  - Bygger kategori-tre for budsjett (kun utgiftskategorier + ukategorisert)
+  - Summerer månedsforbruk per kategori
+  - Regner ut netto pr måned for akkumulert saldo
 
-### 4. UUID-system (KRITISK ENDRING)
-- **To-nivå ID-system**:
-  - `id`: UUID (crypto.randomUUID()) - unik per transaksjon, brukes for React keys og selection
-  - `transactionId`: Content hash - bevart for duplikatsjekk, regler og locks
-- **Genereres ved import**: Hver transaksjon får UUID ved CSV-import
-- **Lagres i localStorage**: UUID-er bevares via Zustand persist
-- **Løser React warning**: "Encountered two children with the same key" er fikset
-- **Duplikatsjekk**: Bruker fortsatt transactionId (content hash)
-- **Selection**: Oppdatert til å bruke `id` i stedet for `transactionId`
-- **UUID preservation**: Når applyRules kjøres, bevares UUID-er
+### 4. Backup & Restore
+- `createBackupData()` eksporterer nå:
+  - `budgets` som entries-array
+  - `startBalance` som objekt `{ amount, date }`
+- `restoreFromBackup()` rehydrerer budgets og startBalance
+- Backup-siden viser antall budsjetter + startbalanse i forhåndsvisning
 
-### 5. Sortering
-- **Sorterbare kolonner**: Tekst (alfabetisk) og Beløp (numerisk)
-- **Toggle-funksjon**: Klikk på header → asc → desc → none
-- **Ikoner**: ArrowUpDown (inaktiv), ArrowUp (asc), ArrowDown (desc) fra lucide-react
-- **Sorteres før paginering**: Hele filtrerte datasett sorteres, ikke bare synlig side
-- **Status-indikator**: Viser aktiv sortering i footer
+### 5. UI-oppdateringer
+- Sidebar: `[H, T, K, O, B, I]`
+- `demo/App.tsx` støtter ny rute `budsjett`
+- Budsjettabellen bruker gjenbrukte mønstre fra Oversikt (collapsible hovedkategorier)
 
-### 6. Paginering
-- **250 transaksjoner per side**
-- **Smart sidevelger**: Viser maks 5 sidetall
-- **Navigasjon**: Forrige/Neste-knapper med disable-state
-- **Auto-reset**: Hopper til side 1 ved filter/sorteringsendring
-- **Visning**: "Viser 1-250 av 1000 transaksjoner"
+## Viktige filer
+- `components/BudgetPage.tsx`
+- `services/budgetCalculations.ts`
+- `src/store/state.ts`, `src/store/actions.ts`, `src/store/index.ts`
+- `services/autoBackup.ts`, `services/storeMigration.ts`
+- `components/Sidebar.tsx`, `demo/App.tsx`
+- `dev/testStoreMigration.ts`
+- Dokumentasjon: `BACKUP_SYSTEM.md`, `STORE_CLEANUP.md`
 
-### 7. Import-forbedringer
-- **Bedre logging**: Detaljert statistikk i console
-- **UUID-logging**: Viser at UUID genereres
-- **Content hash**: Vises i duplikat-logging
-- **Statistikk**: CSV rows, nye, duplikater, total i system
+## Tester / bygg
+- `npm run build` ✅
+- `npx tsx dev/testStoreMigration.ts` ✅ (verifiserer ny struktur)
 
-## Viktige tekniske detaljer:
+## Åpne punkter / videre arbeid
+- Ytterligere visuelt finpuss på budsjettoppsummeringen (valgfritt)
+- Eventuelle eksport/import tester for budsjettdata i praksis
 
-### Dataflyt:
-```
-CSV Parse → Generate UUID + Content Hash → Duplicate Check (content hash) → 
-Import Unique → Apply Rules → Sort → Paginate
-```
-
-### Duplikatsjekk:
-```typescript
-const existingContentHashes = new Set(transactions.map(t => t.transactionId));
-const duplicates = newTransactions.filter(tx => existingContentHashes.has(tx.transactionId));
-```
-
-### UUID preservation i actions:
-```typescript
-// I categorizeTransactionAction, bulkCategorize, applyRulesToAll:
-state.transactions = state.transactions.map((original, index) => ({
-  ...applyResult.categorized[index],
-  id: original.id, // Preserve UUID
-}));
-```
-
-### Filer modifisert:
-- `components/Sidebar.tsx` - 90px bred, bokstavknapper
-- `components/TransactionPage.tsx` - Hovedfil for alle endringer
-- `components/CategoryPage.tsx` - max-width oppdatering
-- `components/ui/table.tsx` - spacing reduksjon
-- `categoryEngine.ts` - id felt lagt til
-- `src/store/state.ts` - fixInvalidCategorizations funksjon
-- `src/store/actions.ts` - UUID preservation, validering
-- `dev/csvImportFlowTest.ts` - oppdatert for UUID
-- `package.json` - lucide-react dependency
-
-## Testing status:
-- ✅ `endToEndTest.ts` - PASS
-- ✅ `csvImportFlowTest.ts` - PASS (oppdatert)
-- ✅ `testReimportDuplicates.ts` - PASS
-- ✅ `bulkAddSubcategoriesTest.ts` - PASS
-- ✅ `verifyImportDupeCheck.ts` - PASS
-- ⚠️ `bulkSelectFilterTest.ts` - Fungerer (små avvik)
-
-## Kjente issues:
-- To identiske Dott-transaksjoner (25.10.24, -18.70 kr) har samme content hash
-- Ved re-import vil begge bli detektert som duplikater (by design)
-- Dette er akseptert oppførsel
-
-## Neste steg som ble foreslått men ikke implementert:
-- Lag ny side med menypunkt "R" i Sidebar (ikke påbegynt)
-
-## Git status:
-- 6 commits ahead of origin/main
-- Siste commits:
-  - 182ec3e: UUID-based transaction IDs, sorting, and pagination
-  - 544bade: Improve UI layout and category management
+## Git status (etter siste bygg/test)
+- Lokale endringer ikke commitet (arbeid pågår)
+- Forrige push: `feat: implement backup/restore system and store cleanup` (da7f3c6)
 
 ---
 
-**Denne filen inneholder komplett kontekst for å fortsette arbeidet i en ny tråd.**
+**Denne filen oppdateres for å holde kontinuitet mellom økter.** 
 
