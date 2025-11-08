@@ -359,32 +359,47 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
       </TableCell>
 
       {/* Date */}
-      <TableCell className="font-medium whitespace-nowrap">
+      <TableCell className="w-[6rem] font-medium whitespace-nowrap">
         {formatDateShort(transaction.dato)}
       </TableCell>
 
+      {/* Text */}
+      <TableCell className="min-w-[12rem] max-w-[18rem] truncate">
+        {transaction.tekst}
+      </TableCell>
+
       {/* Amount */}
-      <TableCell className={`font-semibold whitespace-nowrap ${amountColor}`}>
+      <TableCell className={`w-[7rem] font-semibold whitespace-nowrap text-right ${amountColor}`}>
         {formattedAmount}
       </TableCell>
 
       {/* Type */}
-      <TableCell className="text-sm text-gray-600">
+      <TableCell className="w-[8rem] text-sm text-gray-600">
         {transaction.type}
       </TableCell>
 
-      {/* Text */}
-      <TableCell className="max-w-xs truncate">
-        {transaction.tekst}
+      {/* Fra konto */}
+      <TableCell className="w-[10rem] text-sm text-gray-600">
+        {transaction.fraKonto || '-'}
       </TableCell>
 
-      {/* Underkategori (from CSV, read-only) */}
-      <TableCell className="text-sm text-gray-500 italic">
-        {transaction.underkategori || '-'}
+      {/* Fra kontonummer */}
+      <TableCell className="w-[12rem] text-sm text-gray-600 font-mono whitespace-nowrap">
+        {transaction.fraKontonummer || '-'}
+      </TableCell>
+
+      {/* Til konto */}
+      <TableCell className="w-[10rem] text-sm text-gray-600">
+        {transaction.tilKonto || '-'}
+      </TableCell>
+
+      {/* Til kontonummer */}
+      <TableCell className="w-[12rem] text-sm text-gray-600 font-mono whitespace-nowrap">
+        {transaction.tilKontonummer || '-'}
       </TableCell>
 
       {/* Category (dropdown) */}
-      <TableCell className="max-w-[12rem]">
+      <TableCell className="w-[12rem] min-w-[140px]">
         <div className="flex items-center gap-2">
           {transaction.isLocked && (
             <span className="text-amber-600" title="Låst som unntak">
@@ -408,24 +423,9 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         </div>
       </TableCell>
 
-      {/* Til konto */}
-      <TableCell className="text-sm text-gray-600">
-        {transaction.tilKonto || '-'}
-      </TableCell>
-
-      {/* Til kontonummer */}
-      <TableCell className="text-sm text-gray-600 font-mono">
-        {transaction.tilKontonummer || '-'}
-      </TableCell>
-
-      {/* Fra konto */}
-      <TableCell className="text-sm text-gray-600">
-        {transaction.fraKonto || '-'}
-      </TableCell>
-
-      {/* Fra kontonummer */}
-      <TableCell className="text-sm text-gray-600 font-mono">
-        {transaction.fraKontonummer || '-'}
+      {/* Importert (from CSV) */}
+      <TableCell className="w-[12rem] text-sm text-gray-500 italic">
+        {transaction.underkategori || '-'}
       </TableCell>
     </TableRow>
   );
@@ -831,7 +831,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                     onChange={handleToggleSelectAll}
                   />
                 </TableHead>
-                <TableHead>
+                <TableHead className="w-[6rem]">
                   <button
                     onClick={() => handleSort('dato')}
                     className="flex items-center gap-1 hover:text-gray-900 transition-colors"
@@ -848,25 +848,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                     )}
                   </button>
                 </TableHead>
-                <TableHead>
-                  <button
-                    onClick={() => handleSort('beløp')}
-                    className="flex items-center gap-1 hover:text-gray-900 transition-colors"
-                  >
-                    Beløp
-                    {sortField === 'beløp' ? (
-                      sortDirection === 'asc' ? (
-                        <ArrowUp className="w-4 h-4" />
-                      ) : (
-                        <ArrowDown className="w-4 h-4" />
-                      )
-                    ) : (
-                      <ArrowUpDown className="w-4 h-4 opacity-40" />
-                    )}
-                  </button>
-                </TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>
+                <TableHead className="min-w-[12rem] max-w-[18rem]">
                   <button
                     onClick={() => handleSort('tekst')}
                     className="flex items-center gap-1 hover:text-gray-900 transition-colors"
@@ -883,12 +865,30 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                     )}
                   </button>
                 </TableHead>
-                <TableHead>Underkategori</TableHead>
-                <TableHead>Kategori</TableHead>
-                <TableHead>Til konto</TableHead>
-                <TableHead>Til kontonummer</TableHead>
-                <TableHead>Fra konto</TableHead>
-                <TableHead>Fra kontonummer</TableHead>
+                <TableHead className="w-[7rem] text-right">
+                  <button
+                    onClick={() => handleSort('beløp')}
+                    className="flex items-center justify-end gap-1 hover:text-gray-900 transition-colors w-full"
+                  >
+                    Beløp
+                    {sortField === 'beløp' ? (
+                      sortDirection === 'asc' ? (
+                        <ArrowUp className="w-4 h-4" />
+                      ) : (
+                        <ArrowDown className="w-4 h-4" />
+                      )
+                    ) : (
+                      <ArrowUpDown className="w-4 h-4 opacity-40" />
+                    )}
+                  </button>
+                </TableHead>
+                <TableHead className="w-[8rem]">Type</TableHead>
+                <TableHead className="w-[10rem]">Fra konto</TableHead>
+                <TableHead className="w-[12rem]">Fra kontonummer</TableHead>
+                <TableHead className="w-[10rem]">Til konto</TableHead>
+                <TableHead className="w-[12rem]">Til kontonummer</TableHead>
+                <TableHead className="w-[12rem] min-w-[140px]">Kategori</TableHead>
+                <TableHead className="w-[12rem]">Importert</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
