@@ -85,14 +85,16 @@ export function buildBudgetCategoryTree(
 
     const hasChildren = children.length > 0;
 
-    rows.push({
+    const row: BudgetCategoryRow = {
       categoryId: hk.id,
       categoryName: hk.name,
       level: 0,
       isCollapsible: hasChildren,
       isEditable: !hasChildren,
       children: hasChildren ? children : undefined,
-    });
+    };
+
+    rows.push(row);
   });
 
   const hasUncategorized = rows.some((row) => row.categoryId === '__uncategorized');

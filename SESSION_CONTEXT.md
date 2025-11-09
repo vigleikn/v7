@@ -10,54 +10,30 @@
 - Viser akkumulert kontosaldo basert på startbalanse + netto transaksjoner
 - Modal for å sette startbalanse med datovelger
 
-### 2. Zustand store
-- Lagt til `budgets: Map<string, number>` (nøkkel: `categoryId|YYYY-MM`)
-- Lagt til `startBalance: { amount: number; date: string } | null`
-- Nye actions: `setBudget`, `getBudget`, `clearBudget`, `setStartBalance`, `getStartBalance`
-- Persist oppdatert til å lagre/rehydrere budgets + startBalance
-- `runStoreMigration()` normaliserer gamle data (konverterer arrays/objekter til Map, validerer startbalanse)
+### 2. Zustand & backup (tidligere)
+- Budsjett-state (`budgets`, `startBalance`), migrering og persist logikk
+- `services/budgetCalculations.ts` for månedstall
+- Backup/gjenoppretting inkluderte budsjetter; dokumentasjon i `BACKUP_SYSTEM.md`, `STORE_CLEANUP.md`
 
-### 3. Beregninger
-- Ny helper `services/budgetCalculations.ts`:
-  - Genererer månedsekvenser (`getMonthSequence`, `shiftMonth`)
-  - Bygger kategori-tre for budsjett (kun utgiftskategorier + ukategorisert)
-  - Summerer månedsforbruk per kategori
-  - Regner ut netto pr måned for akkumulert saldo
+## Senere økter (sammendrag)
 
-### 4. Backup & Restore
-- `createBackupData()` eksporterer nå:
-  - `budgets` som entries-array
-  - `startBalance` som objekt `{ amount, date }`
-- `restoreFromBackup()` rehydrerer budgets og startBalance
-- Backup-siden viser antall budsjetter + startbalanse i forhåndsvisning
+- Justerte budsjettsiden videre: fjernet total-rader, nøytral fargepalett, fjernet `Overført` fra treet.
+- Transaksjonssiden fikk større overhaling:
+  - Default sortering etter dato (nyeste først) med sorteringsknapper for dato/tekst/beløp.
+  - Kolonner reorganisert: `Dato → Tekst → Beløp → Type → Fra konto → Fra kontonummer → Til konto → Til kontonummer → Kategori → Importert`.
+  - Konsistente bredder (`min-w`/`max-w`) og tekstkolonne begrenset til 18rem.
+- Forsøk på `react-datepicker`/`date-fns` ble rullet tilbake; vi er tilbake på `<input type="date">`.
+- Ny datepicker-kode, CSS og ekstra dependencies er fjernet; prosjektet bygger rent (`npm run build`).
 
-### 5. UI-oppdateringer
-- Sidebar: `[H, T, K, O, B, I]`
-- `demo/App.tsx` støtter ny rute `budsjett`
-- Budsjettabellen bruker gjenbrukte mønstre fra Oversikt (collapsible hovedkategorier)
+## Videre arbeid
+- Visuelt dobbelsjekke transaksjonstabellen med lange tekster/kontonummer.
+- Eventuell ny datepicker bør planlegges på nytt om behovet fortsatt står.
 
-## Viktige filer
-- `components/BudgetPage.tsx`
-- `services/budgetCalculations.ts`
-- `src/store/state.ts`, `src/store/actions.ts`, `src/store/index.ts`
-- `services/autoBackup.ts`, `services/storeMigration.ts`
-- `components/Sidebar.tsx`, `demo/App.tsx`
-- `dev/testStoreMigration.ts`
-- Dokumentasjon: `BACKUP_SYSTEM.md`, `STORE_CLEANUP.md`
-
-## Tester / bygg
-- `npm run build` ✅
-- `npx tsx dev/testStoreMigration.ts` ✅ (verifiserer ny struktur)
-
-## Åpne punkter / videre arbeid
-- Ytterligere visuelt finpuss på budsjettoppsummeringen (valgfritt)
-- Eventuelle eksport/import tester for budsjettdata i praksis
-
-## Git status (etter siste bygg/test)
-- Lokale endringer ikke commitet (arbeid pågår)
-- Forrige push: `feat: implement backup/restore system and store cleanup` (da7f3c6)
+## Git / bygge-status
+- Siste commit: `chore: adjust transaction table widths` (dato, kolonnearbeid).
+- `npm run build` ✅; `dev/testStoreMigration.ts` ble kjørt da budsjettmodulen ble innført (fortsatt gyldig).
 
 ---
 
-**Denne filen oppdateres for å holde kontinuitet mellom økter.** 
+**Denne filen oppdateres for å holde kontinuitet mellom økter.**
 

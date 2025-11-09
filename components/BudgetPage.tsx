@@ -61,6 +61,36 @@ const formatCurrency = (value: number): string => {
 
 const getMonthFromDate = (date: string): string => date.slice(0, 7);
 
+const normalizeDateKey = (date: string): string | null => {
+  if (!date) return null;
+  const trimmed = date.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.includes('.')) {
+    const [day, month, yearRaw] = trimmed.split('.');
+    if (!day || !month || !yearRaw) return null;
+    const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw.padStart(4, '0');
+    return `${year}${month.padStart(2, '0')}${day.padStart(2, '0')}`;
+  }
+
+  const parts = trimmed.split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    if (!year || !month || !day) return null;
+    return `${year.padStart(4, '0')}${month.padStart(2, '0')}${day.padStart(2, '0')}`;
+  }
+
+  if (parts.length === 2) {
+    const [year, month] = parts;
+    if (!year || !month) return null;
+    return `${year.padStart(4, '0')}${month.padStart(2, '0')}01`;
+  }
+
+  return null;
+};
+
+const getMonthStartKey = (month: string): string | null => normalizeDateKey(`${month}-01`);
+
 export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   const [activePage] = useState('budsjett');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
@@ -82,6 +112,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     shallow
   );
   const startBalance = useTransactionStore((state) => state.startBalance);
+  const currentMonth = toYearMonth(new Date());
   const setBudget = useTransactionStore((state) => state.setBudget);
   const setStartBalance = useTransactionStore((state) => state.setStartBalance);
 
@@ -126,6 +157,16 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     return ids;
   }, [categoryTree]);
 
+  const overfortCategoryIds = useMemo(() => {
+    const ids = new Set<string>();
+    const overfort = hovedkategorier.find((hk) => hk.id === 'overfort');
+    if (overfort) {
+      ids.add(overfort.id);
+      overfort.underkategorier?.forEach((id) => ids.add(id));
+    }
+    return ids;
+  }, [hovedkategorier]);
+
   const spendingMap = useMemo(
     () =>
       computeMonthlySpending(
@@ -168,10 +209,98 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     [budgetMap, spendingMap, visibleMonths]
   );
 
-  const rowViews = useMemo(
+  const baseRowViews = useMemo(
     () => categoryTree.map((row) => buildRowView(row)),
     [categoryTree, buildRowView]
   );
+
+  const expensesRowView = useMemo((): BudgetRowView | null => {
+    const expenseRows = baseRowViews.filter(
+      (row) => row.categoryId !== 'cat_inntekter_default'
+    );
+
+    if (expenseRows.length === 0) {
+      return null;
+    }
+
+    const monthly = visibleMonths.map((month, idx) => {
+      const budget = expenseRows.reduce(
+        (sum, row) => sum + row.monthly[idx].budget,
+        0
+      );
+      const actual = expenseRows.reduce(
+        (sum, row) => sum + row.monthly[idx].actual,
+        0
+      );
+      const saldo = budget - actual;
+      return { month, budget, actual, saldo };
+    });
+
+    return {
+      categoryId: '__expenses_total',
+      categoryName: 'Utgifter',
+      level: 0,
+      isCollapsible: false,
+      isEditable: false,
+      monthly,
+    };
+  }, [baseRowViews, visibleMonths]);
+
+  const rowViews = useMemo(() => {
+    if (!expensesRowView) {
+      return baseRowViews;
+    }
+
+    const rows = [...baseRowViews];
+    const incomeIndex = rows.findIndex((row) => row.categoryId === 'cat_inntekter_default');
+    const insertIndex = incomeIndex >= 0 ? incomeIndex + 1 : 0;
+    rows.splice(insertIndex, 0, expensesRowView);
+    return rows;
+  }, [baseRowViews, expensesRowView]);
+
+  const currentMonthBalance = useMemo(() => {
+    if (!startBalance) {
+      return null;
+    }
+
+    const startKey = normalizeDateKey(startBalance.date);
+    if (!startKey) {
+      return null;
+    }
+
+    const monthStartKey = getMonthStartKey(currentMonth);
+    const nextMonthKey = getMonthStartKey(shiftMonth(currentMonth, 1));
+
+    if (!monthStartKey || !nextMonthKey) {
+      return null;
+    }
+
+    const balance = transactions.reduce((total, tx) => {
+      const txKey = normalizeDateKey(tx.dato);
+      if (!txKey) {
+        return total;
+      }
+
+      if (txKey < startKey || txKey < monthStartKey || txKey >= nextMonthKey) {
+        return total;
+      }
+
+      if (tx.categoryId && overfortCategoryIds.has(tx.categoryId)) {
+        return total;
+      }
+
+      if (!tx.categoryId && tx.hovedkategori?.toLowerCase() === 'overført') {
+        return total;
+      }
+
+      return total + tx.beløp;
+    }, startBalance.amount);
+
+    return balance;
+  }, [currentMonth, overfortCategoryIds, startBalance, transactions]);
+
+  const currentMonthSaldoDisplay =
+    currentMonthBalance !== null ? formatCurrency(currentMonthBalance) : '–';
 
   const earliestDataMonth = useMemo(() => {
     const months: string[] = [];
@@ -357,15 +486,19 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     const hasChildren = !!row.children && row.children.length > 0;
     const isMain = level === 0 && row.categoryId !== '__uncategorized';
 
-    const rowClassNames = [
-      'border-b border-gray-200',
-      level === 0 ? 'bg-gray-100' : '',
-    ]
+    const baseRowColor =
+      row.categoryId === 'cat_inntekter_default' || row.categoryId === '__expenses_total'
+        ? 'bg-blue-50'
+        : level === 0
+        ? 'bg-gray-100'
+        : '';
+
+    const rowClassNames = ['border-b border-gray-200', baseRowColor]
       .filter(Boolean)
       .join(' ');
 
-    return (
-      <React.Fragment key={row.categoryId}>
+    const rowBody = (
+      <>
         <tr className={rowClassNames}>
           <td
             className="px-4 py-3 text-sm font-medium text-gray-800"
@@ -388,7 +521,6 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
               <span>{row.categoryName}</span>
             </div>
           </td>
-
           {row.monthly.map((cell) => {
             const key = `${row.categoryId}|${cell.month}`;
             const isEditable = row.isEditable;
@@ -426,8 +558,34 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
         </tr>
 
         {hasChildren && isExpanded && row.children!.map((child) => renderRow(child, level + 1))}
-      </React.Fragment>
+      </>
     );
+
+    if (row.categoryId === '__expenses_total') {
+      return (
+        <React.Fragment key={row.categoryId}>
+          <tr className="bg-gray-50 border-t border-gray-200">
+            <td className="px-4 py-2" />
+            {visibleMonths.map((month) => (
+              <React.Fragment key={`expenses-heading-${month}`}>
+                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
+                  Øremerket
+                </td>
+                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
+                  Brukt
+                </td>
+                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
+                  Rest
+                </td>
+              </React.Fragment>
+            ))}
+          </tr>
+          {rowBody}
+        </React.Fragment>
+      );
+    }
+
+    return <React.Fragment key={row.categoryId}>{rowBody}</React.Fragment>;
   };
 
   return (
@@ -443,65 +601,92 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                 Sett budsjett per underkategori, følg forbruk og se hvor mye som gjenstår.
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={openStartBalanceModal}
-              title={startBalance ? `Startbalanse: ${formatCurrency(startBalance.amount)} kr` : 'Sett startbalanse'}
-              aria-label="Sett startbalanse"
-            >
-              <PiggyBank className="w-5 h-5" />
-            </Button>
-          </div>
-
-          <div className="flex items-center justify-between mb-4">
-            <Button variant="outline" onClick={handlePrev} disabled={!canGoBack}>
-              <ChevronLeft className="w-4 h-4 mr-2" />
-              Forrige
-            </Button>
             <div className="flex items-center gap-6">
-              {visibleMonths.map((month) => (
-                <div key={`header-${month}`} className="text-center">
-                  <p className="text-sm font-semibold text-gray-700">
-                    {formatMonthHeader(month)}
+              {currentMonthBalance !== null && (
+                <div className="text-right">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Saldo {formatMonthHeader(currentMonth)}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {currentMonthSaldoDisplay}
                   </p>
                 </div>
-              ))}
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={openStartBalanceModal}
+                title={
+                  startBalance
+                    ? `Startbalanse: ${formatCurrency(startBalance.amount)} kr`
+                    : 'Sett startbalanse'
+                }
+                aria-label="Sett startbalanse"
+              >
+                <PiggyBank className="w-5 h-5" />
+              </Button>
             </div>
-            <Button variant="outline" onClick={handleNext}>
-              Neste
-              <ChevronRight className="w-4 h-4 ml-2" />
-            </Button>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-100 border-b border-gray-200">
                 <tr>
-                  <th rowSpan={2} className="px-4 py-3 text-left font-semibold text-gray-700">
+                  <th
+                    rowSpan={2}
+                    className="px-4 py-3 text-left font-semibold text-gray-700 align-middle"
+                    scope="col"
+                  >
+                    <button
+                      onClick={handlePrev}
+                      disabled={!canGoBack}
+                      className="mr-2 p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                      aria-label="Forrige måned"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
                     Kategori
                   </th>
-                  {visibleMonths.map((month) => (
+                  {visibleMonths.map((month, index) => (
                     <th
                       key={`month-${month}`}
                       colSpan={3}
-                      className="px-3 py-3 text-center font-semibold text-gray-700"
+                      className="px-3 py-3 text-center font-semibold text-gray-700 relative"
+                      scope="colgroup"
                     >
-                      {formatMonthHeader(month)}
+                      <span>{formatMonthHeader(month)}</span>
+                      {index === visibleMonths.length - 1 && (
+                        <button
+                          onClick={handleNext}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800"
+                          aria-label="Neste måned"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      )}
                     </th>
                   ))}
                 </tr>
-                <tr>
+                <tr className="bg-gray-50 border-t border-gray-200">
                   {visibleMonths.map((month) => (
                     <React.Fragment key={`labels-${month}`}>
-                      <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                        Budsjett
+                      <th
+                        className="px-3 py-2 text-right text-xs font-semibold text-gray-600"
+                        scope="col"
+                      >
+                        Forventet
                       </th>
-                      <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
+                      <th
+                        className="px-3 py-2 text-right text-xs font-semibold text-gray-600"
+                        scope="col"
+                      >
                         Faktisk
                       </th>
-                      <th className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                        Differanse
+                      <th
+                        className="px-3 py-2 text-right text-xs font-semibold text-gray-600"
+                        scope="col"
+                      >
+                        Mangler
                       </th>
                     </React.Fragment>
                   ))}
