@@ -552,25 +552,29 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
 
     const rowBody = (
       <>
-        <tr className={rowClassNames}>
+        <tr
+          className={`${rowClassNames} ${hasChildren ? 'cursor-pointer' : ''}`}
+          onClick={() => {
+            if (hasChildren) {
+              toggleCategory(row.categoryId);
+            }
+          }}
+        >
           <td
             className="px-4 py-3 text-sm font-medium text-gray-800"
             style={{ paddingLeft: `${level * 1.5 + 1}rem` }}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center">
               {hasChildren && (
-                <button
-                  onClick={() => toggleCategory(row.categoryId)}
-                  className="text-gray-600 hover:text-gray-800"
-                >
+                <span className="text-gray-600 mr-2">
                   {isExpanded ? (
                     <ChevronDown className="w-4 h-4" />
                   ) : (
                     <ChevronRightIcon className="w-4 h-4" />
                   )}
-                </button>
+                </span>
               )}
-              {!hasChildren && isMain && <span className="w-4" />}
+              {!hasChildren && isMain && <span className="w-4 mr-2" />}
               <span>{row.categoryName}</span>
             </div>
           </td>
@@ -583,7 +587,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
             return (
               <React.Fragment key={key}>
                 <td className="px-3 py-3 text-right align-middle">
-                  <div className="w-[6.5rem] text-right ml-auto">
+                  <div className="w-[6.5rem] text-right ml-auto" onClick={(e) => e.stopPropagation()}>
                     {isEditable ? (
                       activeEditingKey === key ? (
                         <Input
@@ -602,7 +606,10 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                       ) : (
                         <button
                           type="button"
-                          onClick={() => setActiveEditingKey(key)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setActiveEditingKey(key);
+                          }}
                           className="w-full text-right block text-sm text-gray-700 font-medium px-2 py-2 rounded-md border border-transparent hover:border-gray-300 transition-colors"
                         >
                           {formatCurrency(cell.budget)}
@@ -760,7 +767,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                 </tr>
                 <tr className="bg-white border-t border-gray-200">
                   <th className="px-4 py-2 text-xs font-semibold text-gray-500 text-left">
-                    Oversikt
+                    
                   </th>
                   {visibleMonths.map((month) => (
                     <React.Fragment key={`summary-${month}`}>
