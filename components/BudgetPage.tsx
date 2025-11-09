@@ -636,40 +636,31 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                     className="px-4 py-3 text-left font-semibold text-gray-700 align-middle"
                     scope="col"
                   >
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={handlePrev}
-                        disabled={!canGoBack}
-                        className="p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
-                        aria-label="Forrige måned"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <span>Kategori</span>
-                    </div>
+                    <button
+                      onClick={handlePrev}
+                      disabled={!canGoBack}
+                      className="p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                      aria-label="Forrige måned"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
                   </th>
                   {visibleMonths.map((month, index) => (
                     <th
                       key={`month-${month}`}
                       colSpan={3}
-                      className="px-3 py-3 text-center font-semibold text-gray-700"
+                      className="px-3 py-3 text-center font-semibold text-gray-700 relative"
                       scope="colgroup"
                     >
-                      <span className="inline-flex items-center justify-center gap-2">
-                        <span>{formatMonthHeader(month)}</span>
-                        {index === visibleMonths.length - 1 && (
-                          <button
-                            onClick={handleNext}
-                            className="p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800"
-                            aria-label="Neste måned"
-                          >
-                            <ChevronRight className="w-4 h-4" />
-                          </button>
-                        )}
-                      </span>
-
+                      <span>{formatMonthHeader(month)}</span>
                       {index === visibleMonths.length - 1 && (
-                        <span className="sr-only">Sluttkolonne</span>
+                        <button
+                          onClick={handleNext}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800"
+                          aria-label="Neste måned"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
                       )}
                     </th>
                   ))}
