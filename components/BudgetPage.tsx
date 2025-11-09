@@ -179,8 +179,10 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
 
   const buildRowView = useCallback(
     (row: BudgetCategoryRow): BudgetRowView => {
-      if (row.children && row.children.length > 0) {
-        const childViews = row.children.map(buildRowView);
+      const { children, ...rest } = row;
+
+      if (children && children.length > 0) {
+        const childViews = children.map(buildRowView);
         const monthly = visibleMonths.map((month, idx) => {
           const budget = childViews.reduce(
             (sum, child) => sum + child.monthly[idx].budget,
@@ -193,7 +195,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
           const saldo = budget - actual;
           return { month, budget, actual, saldo };
         });
-        return { ...row, monthly, children: childViews };
+        return { ...rest, monthly, children: childViews };
       }
 
       const monthly = visibleMonths.map((month) => {
@@ -204,7 +206,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
         return { month, budget, actual, saldo };
       });
 
-      return { ...row, monthly };
+      return { ...rest, monthly };
     },
     [budgetMap, spendingMap, visibleMonths]
   );
@@ -212,6 +214,11 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   const baseRowViews = useMemo(
     () => categoryTree.map((row) => buildRowView(row)),
     [categoryTree, buildRowView]
+  );
+
+  const incomeRowView = useMemo(
+    () => baseRowViews.find((row) => row.categoryId === 'cat_inntekter_default') ?? null,
+    [baseRowViews]
   );
 
   const expensesRowView = useMemo((): BudgetRowView | null => {
@@ -257,6 +264,45 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     rows.splice(insertIndex, 0, expensesRowView);
     return rows;
   }, [baseRowViews, expensesRowView]);
+
+  const balanceRowView = useMemo((): BudgetRowView | null => {
+    if (!incomeRowView) return null;
+
+    const expenseMonthly = expensesRowView?.monthly ?? [];
+
+    const monthly = visibleMonths.map((month, idx) => {
+      const incomeBudget = incomeRowView.monthly[idx]?.budget ?? 0;
+      const incomeActual = incomeRowView.monthly[idx]?.actual ?? 0;
+      const incomeSaldo = incomeRowView.monthly[idx]?.saldo ?? 0;
+
+      const expenseBudget = expenseMonthly[idx]?.budget ?? 0;
+      const expenseActual = expenseMonthly[idx]?.actual ?? 0;
+      const expenseSaldo = expenseMonthly[idx]?.saldo ?? 0;
+
+      return {
+        month,
+        budget: incomeBudget - expenseBudget,
+        actual: incomeActual - expenseActual,
+        saldo: incomeSaldo - expenseSaldo,
+      };
+    });
+
+    return {
+      categoryId: '__balance_row',
+      categoryName: 'Balanse',
+      level: 0,
+      isCollapsible: false,
+      isEditable: false,
+      monthly,
+    };
+  }, [expensesRowView, incomeRowView, visibleMonths]);
+
+  const finalRowViews = useMemo(() => {
+    if (!balanceRowView) {
+      return rowViews;
+    }
+    return [balanceRowView, ...rowViews];
+  }, [balanceRowView, rowViews]);
 
   const currentMonthBalance = useMemo(() => {
     if (!startBalance) {
@@ -345,7 +391,12 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   };
 
   const [draftBudgets, setDraftBudgets] = useState<Record<string, string>>({});
+  const [activeEditingKey, setActiveEditingKey] = useState<string | null>(null);
   const prevBudgetMapRef = useRef<Map<string, number>>(new Map());
+
+  useEffect(() => {
+    setActiveEditingKey(null);
+  }, [visibleMonths]);
 
   const budgetKeys = useMemo(() => {
     const keys: string[] = [];
@@ -484,10 +535,12 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   const renderRow = (row: BudgetRowView, level = 0): React.ReactNode => {
     const isExpanded = expandedCategories.has(row.categoryId);
     const hasChildren = !!row.children && row.children.length > 0;
-    const isMain = level === 0 && row.categoryId !== '__uncategorized';
+    const isMain = level === 0 && row.categoryId !== '__expenses_total' && row.categoryId !== '__balance_row';
 
     const baseRowColor =
-      row.categoryId === 'cat_inntekter_default' || row.categoryId === '__expenses_total'
+      row.categoryId === '__balance_row'
+        ? 'bg-blue-100 text-gray-900'
+        : row.categoryId === 'cat_inntekter_default' || row.categoryId === '__expenses_total'
         ? 'bg-blue-50'
         : level === 0
         ? 'bg-gray-100'
@@ -530,21 +583,37 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
             return (
               <React.Fragment key={key}>
                 <td className="px-3 py-3 text-right align-middle">
-                  {isEditable ? (
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      value={draftBudgets[key] ?? ''}
-                      onChange={(e) => handleBudgetChange(key, e.target.value)}
-                      onBlur={() => handleBudgetBlur(row.categoryId, cell.month, key)}
-                      onKeyDown={(e) => handleBudgetKeyDown(e, row.categoryId, cell.month, key)}
-                      className="w-24 text-right"
-                    />
-                  ) : (
-                    <span className="text-sm text-gray-700 font-medium">
-                      {formatCurrency(cell.budget)}
-                    </span>
-                  )}
+                  <div className="w-[6.5rem] text-right ml-auto">
+                    {isEditable ? (
+                      activeEditingKey === key ? (
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          autoFocus
+                          value={draftBudgets[key] ?? ''}
+                          onChange={(e) => handleBudgetChange(key, e.target.value)}
+                          onBlur={() => {
+                            handleBudgetBlur(row.categoryId, cell.month, key);
+                            setActiveEditingKey(null);
+                          }}
+                          onKeyDown={(e) => handleBudgetKeyDown(e, row.categoryId, cell.month, key)}
+                          className="w-full text-right"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setActiveEditingKey(key)}
+                          className="w-full text-right block text-sm text-gray-700 font-medium px-2 py-2 rounded-md border border-transparent hover:border-gray-300 transition-colors"
+                        >
+                          {formatCurrency(cell.budget)}
+                        </button>
+                      )
+                    ) : (
+                      <span className="block text-sm text-gray-700 font-medium">
+                        {formatCurrency(cell.budget)}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className={`px-3 py-3 text-right align-middle text-sm ${actualClass}`}>
                   {formatCurrency(cell.actual)}
@@ -560,6 +629,30 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
         {hasChildren && isExpanded && row.children!.map((child) => renderRow(child, level + 1))}
       </>
     );
+
+    if (row.categoryId === '__balance_row') {
+      return (
+        <React.Fragment key={row.categoryId}>
+          {rowBody}
+          <tr className="bg-gray-50 border-b border-gray-200">
+            <td className="px-4 py-2" />
+            {visibleMonths.map((month) => (
+              <React.Fragment key={`balance-subheader-${month}`}>
+                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
+                  Forventet
+                </td>
+                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
+                  Faktisk
+                </td>
+                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
+                  Mangler
+                </td>
+              </React.Fragment>
+            ))}
+          </tr>
+        </React.Fragment>
+      );
+    }
 
     if (row.categoryId === '__expenses_total') {
       return (
@@ -665,34 +758,27 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                     </th>
                   ))}
                 </tr>
-                <tr className="bg-gray-50 border-t border-gray-200">
-                  <th className="px-4 py-2" scope="col" />
+                <tr className="bg-white border-t border-gray-200">
+                  <th className="px-4 py-2 text-xs font-semibold text-gray-500 text-left">
+                    Oversikt
+                  </th>
                   {visibleMonths.map((month) => (
-                    <React.Fragment key={`labels-${month}`}>
-                      <th
-                        className="px-3 py-2 text-right text-xs font-semibold text-gray-600"
-                        scope="col"
-                      >
-                        Forventet
+                    <React.Fragment key={`summary-${month}`}>
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 text-right">
+                        Til øremerking
                       </th>
-                      <th
-                        className="px-3 py-2 text-right text-xs font-semibold text-gray-600"
-                        scope="col"
-                      >
-                        Faktisk
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 text-right">
+                        Balanse nå
                       </th>
-                      <th
-                        className="px-3 py-2 text-right text-xs font-semibold text-gray-600"
-                        scope="col"
-                      >
-                        Mangler
+                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 text-right">
+                        Risiko
                       </th>
                     </React.Fragment>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {rowViews.map((row) => renderRow(row))}
+                {finalRowViews.map((row) => renderRow(row))}
               </tbody>
             </table>
           </div>
