@@ -633,41 +633,49 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
               <thead className="bg-gray-100 border-b border-gray-200">
                 <tr>
                   <th
-                    rowSpan={2}
                     className="px-4 py-3 text-left font-semibold text-gray-700 align-middle"
                     scope="col"
                   >
-                    <button
-                      onClick={handlePrev}
-                      disabled={!canGoBack}
-                      className="mr-2 p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
-                      aria-label="Forrige måned"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </button>
-                    Kategori
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handlePrev}
+                        disabled={!canGoBack}
+                        className="p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                        aria-label="Forrige måned"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+                      <span>Kategori</span>
+                    </div>
                   </th>
                   {visibleMonths.map((month, index) => (
                     <th
                       key={`month-${month}`}
                       colSpan={3}
-                      className="px-3 py-3 text-center font-semibold text-gray-700 relative"
+                      className="px-3 py-3 text-center font-semibold text-gray-700"
                       scope="colgroup"
                     >
-                      <span>{formatMonthHeader(month)}</span>
+                      <span className="inline-flex items-center justify-center gap-2">
+                        <span>{formatMonthHeader(month)}</span>
+                        {index === visibleMonths.length - 1 && (
+                          <button
+                            onClick={handleNext}
+                            className="p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800"
+                            aria-label="Neste måned"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        )}
+                      </span>
+
                       {index === visibleMonths.length - 1 && (
-                        <button
-                          onClick={handleNext}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800"
-                          aria-label="Neste måned"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
+                        <span className="sr-only">Sluttkolonne</span>
                       )}
                     </th>
                   ))}
                 </tr>
                 <tr className="bg-gray-50 border-t border-gray-200">
+                  <th className="px-4 py-2" scope="col" />
                   {visibleMonths.map((month) => (
                     <React.Fragment key={`labels-${month}`}>
                       <th
