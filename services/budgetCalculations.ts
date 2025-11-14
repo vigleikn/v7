@@ -137,6 +137,10 @@ export function computeMonthlySpending(
     const month = transactionToYearMonth(tx.dato);
     if (!monthSet.has(month)) return;
 
+    if (tx.categoryId === 'overfort') {
+      return;
+    }
+
     let categoryId = tx.categoryId;
     if (!categoryId) {
       categoryId = '__uncategorized';

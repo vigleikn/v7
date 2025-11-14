@@ -351,8 +351,22 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
     return dateStr;
   };
 
+  const handleRowClick = React.useCallback(
+    (event: React.MouseEvent<HTMLTableRowElement>) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('button, input, select, a, [data-prevent-copy]')) {
+        return;
+      }
+
+      if (transaction.transactionId && navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(transaction.transactionId).catch(() => {});
+      }
+    },
+    [transaction.transactionId]
+  );
+
   return (
-    <TableRow data-state={isSelected ? 'selected' : undefined}>
+    <TableRow data-state={isSelected ? 'selected' : undefined} onClick={handleRowClick}>
       {/* Checkbox */}
       <TableCell className="w-12">
         <Checkbox checked={isSelected} onChange={onToggleSelect} />

@@ -37,6 +37,7 @@ import {
   toYearMonth,
   transactionToYearMonth,
 } from '../services/budgetCalculations';
+import { evaluateBudgetRisk, BudgetRiskLevel } from '../services/budgetRisk';
 
 interface BudgetPageProps {
   onNavigate?: (page: string) => void;
@@ -138,7 +139,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     }
   };
 
-  const visibleMonths = useMemo(() => getMonthSequence(startMonth, 3), [startMonth]);
+  const visibleMonths = useMemo(() => getMonthSequence(startMonth, 4), [startMonth]);
 
   const categoryTree = useMemo(
     () => buildBudgetCategoryTree(hovedkategorier, underkategorier),
@@ -156,16 +157,6 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     categoryTree.forEach(traverse);
     return ids;
   }, [categoryTree]);
-
-  const overfortCategoryIds = useMemo(() => {
-    const ids = new Set<string>();
-    const overfort = hovedkategorier.find((hk) => hk.id === 'overfort');
-    if (overfort) {
-      ids.add(overfort.id);
-      overfort.underkategorier?.forEach((id) => ids.add(id));
-    }
-    return ids;
-  }, [hovedkategorier]);
 
   const spendingMap = useMemo(
     () =>
@@ -331,11 +322,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
         return total;
       }
 
-      if (tx.categoryId && overfortCategoryIds.has(tx.categoryId)) {
-        return total;
-      }
-
-      if (!tx.categoryId && tx.hovedkategori?.toLowerCase() === 'overført') {
+      if (tx.categoryId === 'overfort') {
         return total;
       }
 
@@ -343,10 +330,51 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     }, startBalance.amount);
 
     return balance;
-  }, [currentMonth, overfortCategoryIds, startBalance, transactions]);
+  }, [currentMonth, startBalance, transactions]);
 
   const currentMonthSaldoDisplay =
     currentMonthBalance !== null ? formatCurrency(currentMonthBalance) : '–';
+
+  const riskColorByLevel: Record<BudgetRiskLevel, string> = {
+    'Low': 'text-green-600',
+    'Medium': 'text-amber-600',
+    'High': 'text-orange-600',
+    'Very High': 'text-red-600',
+  };
+
+  const riskLevelLabels: Record<BudgetRiskLevel, string> = {
+    'Low': 'Lav',
+    'Medium': 'Middels',
+    'High': 'Høy',
+    'Very High': 'Svært høy',
+  };
+
+  const riskDescriptions: Record<BudgetRiskLevel, string> = {
+    'Low': 'Budsjett følger planen.',
+    'Medium': 'Hold øye med inntekter og forbruk.',
+    'High': 'Risiko for budsjettoverskridelse – vurder tiltak.',
+    'Very High': 'Øyeblikkelig oppfølging anbefales.',
+  };
+
+  const currentMonthIndex = visibleMonths.indexOf(currentMonth);
+
+  const budgetRisk = useMemo(() => {
+    if (!incomeRowView || !expensesRowView) return null;
+    if (currentMonthIndex === -1) return null;
+
+    const incomeMonth = incomeRowView.monthly[currentMonthIndex];
+    const expenseMonth = expensesRowView.monthly[currentMonthIndex];
+
+    if (!incomeMonth || !expenseMonth) return null;
+
+    return evaluateBudgetRisk({
+      plannedIncome: incomeMonth.budget,
+      actualIncome: incomeMonth.actual,
+      plannedSpending: expenseMonth.budget,
+      actualSpending: expenseMonth.actual,
+      today: new Date(),
+    });
+  }, [incomeRowView, expensesRowView, currentMonthIndex]);
 
   const earliestDataMonth = useMemo(() => {
     const months: string[] = [];
@@ -378,7 +406,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
 
   const handlePrev = () => {
     if (!earliestDataMonth) return;
-    const next = shiftMonth(startMonth, -3);
+    const next = shiftMonth(startMonth, -4);
     if (compareYearMonth(next, earliestDataMonth) < 0) {
       setStartMonth(earliestDataMonth);
     } else {
@@ -387,7 +415,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   };
 
   const handleNext = () => {
-    setStartMonth(shiftMonth(startMonth, 3));
+    setStartMonth(shiftMonth(startMonth, 4));
   };
 
   const [draftBudgets, setDraftBudgets] = useState<Record<string, string>>({});
@@ -553,7 +581,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     const rowBody = (
       <>
         <tr
-          className={`${rowClassNames} ${hasChildren ? 'cursor-pointer' : ''}`}
+          className={`${rowClassNames} ${hasChildren ? 'cursor-pointer' : ''} h-[45px]`}
           onClick={() => {
             if (hasChildren) {
               toggleCategory(row.categoryId);
@@ -561,7 +589,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
           }}
         >
           <td
-            className="px-4 py-3 text-sm font-medium text-gray-800"
+            className="px-4 py-1 text-sm font-medium text-gray-800"
             style={{ paddingLeft: `${level * 1.5 + 1}rem` }}
           >
             <div className="flex items-center">
@@ -578,16 +606,21 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
               <span>{row.categoryName}</span>
             </div>
           </td>
-          {row.monthly.map((cell) => {
+          {row.monthly.map((cell, cellIndex) => {
             const key = `${row.categoryId}|${cell.month}`;
             const isEditable = row.isEditable;
+            const isCurrentMonth = cell.month === currentMonth;
             const actualClass = 'text-gray-800';
             const saldoClass = 'text-gray-800 font-medium';
+            const currentMonthBg = isCurrentMonth ? 'bg-blue-50/50' : '';
+            const isFirstColumnInMonth = cellIndex % 3 === 0;
+            const monthIndex = Math.floor(cellIndex / 3);
+            const monthSpacing = isFirstColumnInMonth && monthIndex > 0 ? 'ml-4' : '';
 
             return (
               <React.Fragment key={key}>
-                <td className="px-3 py-3 text-right align-middle">
-                  <div className="w-[6.5rem] text-right ml-auto" onClick={(e) => e.stopPropagation()}>
+                <td className={`px-2 py-1 text-right align-middle min-w-[5rem] ${currentMonthBg} ${monthSpacing}`}>
+                  <div className="w-full text-right" onClick={(e) => e.stopPropagation()}>
                     {isEditable ? (
                       activeEditingKey === key ? (
                         <Input
@@ -622,10 +655,10 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                     )}
                   </div>
                 </td>
-                <td className={`px-3 py-3 text-right align-middle text-sm ${actualClass}`}>
+                <td className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${actualClass} ${currentMonthBg}`}>
                   {formatCurrency(cell.actual)}
                 </td>
-                <td className={`px-3 py-3 text-right align-middle text-sm ${saldoClass}`}>
+                <td className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${saldoClass} ${currentMonthBg}`}>
                   {formatCurrency(cell.saldo)}
                 </td>
               </React.Fragment>
@@ -641,21 +674,25 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
       return (
         <React.Fragment key={row.categoryId}>
           {rowBody}
-          <tr className="bg-gray-50 border-b border-gray-200">
-            <td className="px-4 py-2" />
-            {visibleMonths.map((month) => (
-              <React.Fragment key={`balance-subheader-${month}`}>
-                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                  Forventet
-                </td>
-                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                  Faktisk
-                </td>
-                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                  Mangler
-                </td>
-              </React.Fragment>
-            ))}
+          <tr className="bg-gray-50 border-b border-gray-200 h-[45px]">
+            <td className="px-4 py-1" />
+            {visibleMonths.map((month, monthIndex) => {
+              const isCurrentMonth = month === currentMonth;
+              const monthSpacing = monthIndex > 0 ? 'ml-4' : '';
+              return (
+                <React.Fragment key={`balance-subheader-${month}`}>
+                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
+                    Forventet
+                  </td>
+                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                    Faktisk
+                  </td>
+                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                    Mangler
+                  </td>
+                </React.Fragment>
+              );
+            })}
           </tr>
         </React.Fragment>
       );
@@ -664,21 +701,25 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     if (row.categoryId === '__expenses_total') {
       return (
         <React.Fragment key={row.categoryId}>
-          <tr className="bg-gray-50 border-t border-gray-200">
-            <td className="px-4 py-2" />
-            {visibleMonths.map((month) => (
-              <React.Fragment key={`expenses-heading-${month}`}>
-                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                  Øremerket
-                </td>
-                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                  Brukt
-                </td>
-                <td className="px-3 py-2 text-right text-xs font-semibold text-gray-600">
-                  Rest
-                </td>
-              </React.Fragment>
-            ))}
+          <tr className="bg-gray-50 border-t border-gray-200 h-[45px]">
+            <td className="px-4 py-1" />
+            {visibleMonths.map((month, monthIndex) => {
+              const isCurrentMonth = month === currentMonth;
+              const monthSpacing = monthIndex > 0 ? 'ml-4' : '';
+              return (
+                <React.Fragment key={`expenses-heading-${month}`}>
+                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
+                    Øremerket
+                  </td>
+                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                    Brukt
+                  </td>
+                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                    Rest
+                  </td>
+                </React.Fragment>
+              );
+            })}
           </tr>
           {rowBody}
         </React.Fragment>
@@ -697,9 +738,6 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
           <div className="flex items-start justify-between mb-8">
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Budsjett</h1>
-              <p className="text-gray-600 mt-2">
-                Sett budsjett per underkategori, følg forbruk og se hvor mye som gjenstår.
-              </p>
             </div>
             <div className="flex items-center gap-6">
               {currentMonthBalance !== null && (
@@ -709,6 +747,16 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                   </p>
                   <p className="text-2xl font-bold text-gray-900">
                     {currentMonthSaldoDisplay}
+                  </p>
+                </div>
+              )}
+              {budgetRisk && (
+                <div className="text-right">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Risiko {formatMonthHeader(currentMonth)}
+                  </p>
+                  <p className={`text-2xl font-bold ${riskColorByLevel[budgetRisk.riskLevel]}`}>
+                    {riskLevelLabels[budgetRisk.riskLevel]}
                   </p>
                 </div>
               )}
@@ -728,7 +776,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-x-auto">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <table className="w-full text-sm">
               <thead className="bg-gray-100 border-b border-gray-200">
                 <tr>
@@ -745,43 +793,50 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                       <ChevronLeft className="w-4 h-4" />
                     </button>
                   </th>
-                  {visibleMonths.map((month, index) => (
-                    <th
-                      key={`month-${month}`}
-                      colSpan={3}
-                      className="px-3 py-3 text-center font-semibold text-gray-700 relative"
-                      scope="colgroup"
-                    >
-                      <span>{formatMonthHeader(month)}</span>
-                      {index === visibleMonths.length - 1 && (
-                        <button
-                          onClick={handleNext}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800"
-                          aria-label="Neste måned"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      )}
-                    </th>
-                  ))}
+                  {visibleMonths.map((month, index) => {
+                    const isCurrentMonth = month === currentMonth;
+                    return (
+                      <th
+                        key={`month-${month}`}
+                        colSpan={3}
+                        className={`px-3 py-3 text-center font-semibold text-gray-700 relative ${isCurrentMonth ? 'bg-blue-50/50 border-l-2 border-r-2 border-blue-200' : ''}`}
+                        scope="colgroup"
+                      >
+                        <span>{formatMonthHeader(month)}</span>
+                        {index === visibleMonths.length - 1 && (
+                          <button
+                            onClick={handleNext}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-2 rounded border border-gray-300 text-gray-600 hover:text-gray-800"
+                            aria-label="Neste måned"
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
-                <tr className="bg-white border-t border-gray-200">
-                  <th className="px-4 py-2 text-xs font-semibold text-gray-500 text-left">
+                <tr className="bg-white border-t border-gray-200 h-[45px]">
+                  <th className="px-4 py-1 text-xs font-semibold text-gray-500 text-left">
                     
                   </th>
-                  {visibleMonths.map((month) => (
-                    <React.Fragment key={`summary-${month}`}>
-                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 text-right">
-                        Til øremerking
-                      </th>
-                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 text-right">
-                        Balanse nå
-                      </th>
-                      <th className="px-3 py-2 text-xs font-semibold text-gray-500 text-right">
-                        Risiko
-                      </th>
-                    </React.Fragment>
-                  ))}
+                  {visibleMonths.map((month, monthIndex) => {
+                    const isCurrentMonth = month === currentMonth;
+                    const monthSpacing = monthIndex > 0 ? 'ml-4' : '';
+                    return (
+                      <React.Fragment key={`summary-${month}`}>
+                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-right min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
+                          Til øremerking
+                        </th>
+                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-right min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                          Balanse nå
+                        </th>
+                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-right min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                          Risiko
+                        </th>
+                      </React.Fragment>
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
