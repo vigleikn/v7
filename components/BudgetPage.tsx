@@ -60,6 +60,14 @@ const formatCurrency = (value: number): string => {
   return Math.round(value).toLocaleString('no');
 };
 
+const getDaysInMonth = (monthString: string): number => {
+  const [year, month] = monthString.split('-').map(Number);
+  // month is 1-indexed (1-12), Date uses 0-indexed months (0-11)
+  // new Date(year, month, 0) gives last day of (month-1) in 0-indexed
+  // For month=11 (November in 1-indexed), new Date(2025, 11, 0) gives last day of November = 30
+  return new Date(year, month, 0).getDate();
+};
+
 const getMonthFromDate = (date: string): string => date.slice(0, 7);
 
 const normalizeDateKey = (date: string): string | null => {
@@ -655,8 +663,51 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                     )}
                   </div>
                 </td>
-                <td className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${actualClass} ${currentMonthBg}`}>
+                <td className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${actualClass} ${currentMonthBg} relative`}>
                   {formatCurrency(cell.actual)}
+                  {cell.budget > 0 && 
+                   row.categoryId !== '__balance_row' && 
+                   row.categoryId !== 'cat_inntekter_default' && (
+                    <>
+                      {/* Background track */}
+                      <div className="absolute bottom-0 left-0 w-full h-[2px] bg-gray-200" />
+                      {(() => {
+                        const progress = Math.min((cell.actual / cell.budget) * 100, 100);
+                        const daysInMonth = getDaysInMonth(cell.month);
+                        const today = new Date();
+                        const currentYear = today.getFullYear();
+                        const currentMonth = today.getMonth() + 1;
+                        const monthYear = cell.month.split('-').map(Number);
+                        const isCurrentMonth = monthYear[0] === currentYear && monthYear[1] === currentMonth;
+                        const todayProgress = isCurrentMonth ? (today.getDate() / daysInMonth) * 100 : null;
+                        
+                        // Determine color: green if progress hasn't reached today marker, red if it has
+                        const progressColor = todayProgress !== null && progress >= todayProgress ? 'bg-red-500' : 'bg-green-500';
+                        // Marker color: white if progress has passed, black otherwise
+                        const markerColor = todayProgress !== null && progress >= todayProgress ? 'bg-white' : 'bg-black';
+                        
+                        return (
+                          <>
+                            {/* Progress bar based on actual / budget */}
+                            <div
+                              className={`absolute bottom-0 left-0 h-[2px] ${progressColor}`}
+                              style={{ width: `${progress}%` }}
+                            />
+                            {/* Today marker */}
+                            {isCurrentMonth && todayProgress !== null && (
+                              <div
+                                className={`absolute bottom-0 w-[2px] h-[2px] ${markerColor}`}
+                                style={{
+                                  left: `${todayProgress}%`,
+                                  transform: 'translateX(-1px)',
+                                }}
+                              />
+                            )}
+                          </>
+                        );
+                      })()}
+                    </>
+                  )}
                 </td>
                 <td className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${saldoClass} ${currentMonthBg}`}>
                   {formatCurrency(cell.saldo)}
