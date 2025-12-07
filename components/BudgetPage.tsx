@@ -55,6 +55,13 @@ interface BudgetRowView extends BudgetCategoryRow {
   children?: BudgetRowView[];
 }
 
+interface ActiveCell {
+  categoryId: string;
+  month: string;
+  categoryName: string;
+  monthLabel: string;
+}
+
 const formatCurrency = (value: number): string => {
   if (Number.isNaN(value)) return '–';
   return Math.round(value).toLocaleString('no');
@@ -103,6 +110,7 @@ const getMonthStartKey = (month: string): string | null => normalizeDateKey(`${m
 export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   const [activePage] = useState('budsjett');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [activeCell, setActiveCell] = useState<ActiveCell | null>(null);
   const [startBalanceModalOpen, setStartBalanceModalOpen] = useState(false);
   const [startBalanceDraft, setStartBalanceDraft] = useState<{ amount: string; date: string }>({
     amount: '',
@@ -342,6 +350,41 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
 
   const currentMonthSaldoDisplay =
     currentMonthBalance !== null ? formatCurrency(currentMonthBalance) : '–';
+
+  // Filter transactions for active cell
+  const activeCellTransactions = useMemo(() => {
+    if (!activeCell) return [];
+
+    const targetMonth = activeCell.month;
+    const categoryId = activeCell.categoryId;
+
+    return transactions.filter((tx) => {
+      // Skip transfers
+      if (tx.categoryId === 'overfort') {
+        return false;
+      }
+
+      // Parse transaction date to yyyy-MM format
+      let txMonth: string;
+      if (tx.dato.includes('.')) {
+        const [day, month, year] = tx.dato.split('.');
+        const fullYear = year.length === 2 ? `20${year}` : year;
+        txMonth = `${fullYear}-${month.padStart(2, '0')}`;
+      } else {
+        txMonth = tx.dato.substring(0, 7);
+      }
+
+      // Check if transaction matches month
+      if (txMonth !== targetMonth) return false;
+
+      // Check if transaction matches category
+      if (categoryId === '__uncategorized') {
+        return !tx.categoryId;
+      }
+
+      return tx.categoryId === categoryId;
+    });
+  }, [activeCell, transactions]);
 
   const riskColorByLevel: Record<BudgetRiskLevel, string> = {
     'Low': 'text-green-600',
@@ -625,6 +668,19 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
             const monthIndex = Math.floor(cellIndex / 3);
             const monthSpacing = isFirstColumnInMonth && monthIndex > 0 ? 'ml-4' : '';
 
+            // Determine if "Balanse nå" cell is clickable
+            // Only subcategories (level === 1) and "Ukategorisert" (__uncategorized)
+            const isCellClickable = 
+              (level === 1 || row.categoryId === '__uncategorized') &&
+              row.categoryId !== '__balance_row' &&
+              row.categoryId !== 'cat_inntekter_default' &&
+              row.categoryId !== '__expenses_total';
+
+            // Check if this cell is active
+            const isActive = 
+              activeCell?.categoryId === row.categoryId && 
+              activeCell?.month === cell.month;
+
             return (
               <React.Fragment key={key}>
                 <td className={`px-2 py-1 text-right align-middle min-w-[5rem] ${currentMonthBg} ${monthSpacing}`}>
@@ -663,7 +719,35 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                     )}
                   </div>
                 </td>
-                <td className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${actualClass} ${currentMonthBg} relative`}>
+                <td 
+                  className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${actualClass} ${currentMonthBg} relative ${
+                    isCellClickable 
+                      ? 'cursor-pointer hover:bg-blue-50 hover:font-semibold' 
+                      : ''
+                  } ${
+                    isActive ? 'bg-blue-100 font-bold ring-2 ring-blue-400 ring-inset' : ''
+                  }`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isCellClickable) return;
+
+                    // Toggle: if same cell clicked, close it
+                    if (
+                      activeCell &&
+                      activeCell.categoryId === row.categoryId &&
+                      activeCell.month === cell.month
+                    ) {
+                      setActiveCell(null);
+                    } else {
+                      setActiveCell({
+                        categoryId: row.categoryId,
+                        month: cell.month,
+                        categoryName: row.categoryName,
+                        monthLabel: formatMonthHeader(cell.month),
+                      });
+                    }
+                  }}
+                >
                   {formatCurrency(cell.actual)}
                   {cell.budget > 0 && 
                    row.categoryId !== '__balance_row' && 
@@ -895,6 +979,81 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
               </tbody>
             </table>
           </div>
+
+          {/* Transaction Detail List */}
+          {activeCell && activeCellTransactions.length > 0 && (
+            <div className="mt-6 bg-white rounded-lg shadow-sm border border-blue-200">
+              <div className="bg-blue-50 px-4 py-3 border-b border-blue-200 flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-blue-900">
+                  {activeCell.categoryName} - {activeCell.monthLabel.toUpperCase()}
+                  <span className="ml-2 text-sm font-normal text-blue-700">
+                    ({activeCellTransactions.length} transaksjon{activeCellTransactions.length !== 1 ? 'er' : ''})
+                  </span>
+                </h3>
+                <button
+                  onClick={() => setActiveCell(null)}
+                  className="text-blue-600 hover:text-blue-800 font-medium text-sm"
+                >
+                  ✕ Lukk
+                </button>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-4 py-2 text-left font-medium text-gray-700">Dato</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-700">Tekst</th>
+                      <th className="px-4 py-2 text-right font-medium text-gray-700">Beløp</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-700">Fra konto</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-700">Til konto</th>
+                      <th className="px-4 py-2 text-left font-medium text-gray-700">Underkategori</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {activeCellTransactions.map((tx) => (
+                      <tr key={tx.id} className="border-b border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-2 whitespace-nowrap">{tx.dato}</td>
+                        <td className="px-4 py-2">{tx.tekst}</td>
+                        <td className={`px-4 py-2 text-right font-semibold whitespace-nowrap ${
+                          tx.beløp >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {Math.round(tx.beløp).toLocaleString('no')}
+                        </td>
+                        <td className="px-4 py-2 text-gray-600">{tx.fraKonto || '-'}</td>
+                        <td className="px-4 py-2 text-gray-600">{tx.tilKonto || '-'}</td>
+                        <td className="px-4 py-2 text-gray-600 italic">{tx.underkategori || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-4 py-3 bg-gray-50 border-t border-gray-200 text-sm text-gray-600">
+                <span className="font-semibold">Total: </span>
+                <span className={`font-bold ${
+                  activeCellTransactions.reduce((sum, tx) => sum + tx.beløp, 0) >= 0 
+                    ? 'text-green-600' 
+                    : 'text-red-600'
+                }`}>
+                  {Math.round(activeCellTransactions.reduce((sum, tx) => sum + tx.beløp, 0)).toLocaleString('no')} kr
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Empty state when cell clicked but no transactions */}
+          {activeCell && activeCellTransactions.length === 0 && (
+            <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center">
+              <p className="text-gray-500">
+                Ingen transaksjoner funnet for <span className="font-semibold">{activeCell.categoryName}</span> i <span className="font-semibold">{activeCell.monthLabel}</span>
+              </p>
+              <button
+                onClick={() => setActiveCell(null)}
+                className="mt-3 text-blue-600 hover:text-blue-800 font-medium text-sm"
+              >
+                Lukk
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
