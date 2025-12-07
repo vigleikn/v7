@@ -49,7 +49,9 @@ async function main() {
   const monthlySpending = computeMonthlySpending(
     transactions,
     monthsWithTransfers,
-    editableCategoryIds
+    editableCategoryIds,
+    hovedkategorier,
+    underkategorier
   );
 
   monthsWithTransfers.forEach((month) => {

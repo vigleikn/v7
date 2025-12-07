@@ -128,10 +128,35 @@ export function transactionToYearMonth(dato: string): string {
 export function computeMonthlySpending(
   transactions: CategorizedTransaction[],
   months: string[],
-  editableCategoryIds: Set<string>
+  editableCategoryIds: Set<string>,
+  hovedkategorier?: Hovedkategori[],
+  underkategorier?: Underkategori[]
 ): Map<string, number> {
   const result = new Map<string, number>();
   const monthSet = new Set(months);
+
+  // Build category lookup maps (similar to monthlyCalculations.ts)
+  const incomeSubcategoryIds = new Set<string>();
+  const savingsSubcategoryIds = new Set<string>();
+
+  if (hovedkategorier && underkategorier) {
+    const incomeHk = hovedkategorier.find(
+      (hk) => hk.id === 'cat_inntekter_default' || hk.name === 'Inntekter'
+    );
+    const savingsHk = hovedkategorier.find(
+      (hk) => hk.id === 'sparing' || hk.name === 'Sparing'
+    );
+
+    if (incomeHk) {
+      incomeSubcategoryIds.add(incomeHk.id);
+      incomeHk.underkategorier?.forEach((ukId) => incomeSubcategoryIds.add(ukId));
+    }
+
+    if (savingsHk) {
+      savingsSubcategoryIds.add(savingsHk.id);
+      savingsHk.underkategorier?.forEach((ukId) => savingsSubcategoryIds.add(ukId));
+    }
+  }
 
   transactions.forEach((tx) => {
     const month = transactionToYearMonth(tx.dato);
@@ -152,7 +177,20 @@ export function computeMonthlySpending(
 
     const key = `${categoryId}|${month}`;
     const value = result.get(key) ?? 0;
-    const delta = Math.abs(tx.beløp);
+
+    // Use same balance logic as OversiktPage (monthlyCalculations.ts)
+    // For income: add tx.beløp directly (positive amounts increase income)
+    // For expenses and savings: subtract tx.beløp (negative amounts become positive, positive amounts become negative)
+    // This means: expense -1000 becomes +1000, refund +200 becomes -200, net = 800
+    let delta: number;
+    if (hovedkategorier && incomeSubcategoryIds.has(categoryId)) {
+      // Income: add directly
+      delta = tx.beløp;
+    } else {
+      // Expenses and savings: subtract (net balance logic)
+      delta = -tx.beløp;
+    }
+
     result.set(key, value + delta);
   });
 

@@ -179,9 +179,11 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
       computeMonthlySpending(
         transactions,
         visibleMonths,
-        new Set(editableCategoryIds)
+        new Set(editableCategoryIds),
+        hovedkategorier,
+        underkategorier
       ),
-    [transactions, visibleMonths, editableCategoryIds]
+    [transactions, visibleMonths, editableCategoryIds, hovedkategorier, underkategorier]
   );
 
   const buildRowView = useCallback(
