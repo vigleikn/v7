@@ -685,8 +685,8 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
 
             return (
               <React.Fragment key={key}>
-                <td className={`px-2 py-1 text-right align-middle min-w-[5rem] ${currentMonthBg} ${monthSpacing}`}>
-                  <div className="w-full text-right" onClick={(e) => e.stopPropagation()}>
+                <td className={`px-2 py-1 text-right align-middle min-w-[5rem] w-[7rem] ${currentMonthBg} ${monthSpacing}`}>
+                  <div className="w-full text-right overflow-hidden" onClick={(e) => e.stopPropagation()}>
                     {isEditable ? (
                       activeEditingKey === key ? (
                         <Input
@@ -700,7 +700,8 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                             setActiveEditingKey(null);
                           }}
                           onKeyDown={(e) => handleBudgetKeyDown(e, row.categoryId, cell.month, key)}
-                          className="w-full text-right"
+                          className="!w-full text-right"
+                          style={{ maxWidth: '100%', boxSizing: 'border-box' }}
                         />
                       ) : (
                         <button
