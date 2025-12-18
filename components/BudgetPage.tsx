@@ -174,6 +174,19 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     return ids;
   }, [categoryTree]);
 
+  // Build set of income subcategory IDs (including the main income category)
+  const incomeCategoryIds = useMemo(() => {
+    const ids = new Set<string>();
+    const incomeHk = hovedkategorier.find(
+      (hk) => hk.id === 'cat_inntekter_default' || hk.name === 'Inntekter'
+    );
+    if (incomeHk) {
+      ids.add(incomeHk.id);
+      incomeHk.underkategorier?.forEach((ukId) => ids.add(ukId));
+    }
+    return ids;
+  }, [hovedkategorier]);
+
   const spendingMap = useMemo(
     () =>
       computeMonthlySpending(
@@ -189,6 +202,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   const buildRowView = useCallback(
     (row: BudgetCategoryRow): BudgetRowView => {
       const { children, ...rest } = row;
+      const isIncomeCategory = incomeCategoryIds.has(row.categoryId);
 
       if (children && children.length > 0) {
         const childViews = children.map(buildRowView);
@@ -201,7 +215,9 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
             (sum, child) => sum + child.monthly[idx].actual,
             0
           );
-          const saldo = budget - actual;
+          // For income: actual - budget (positive when income exceeds budget)
+          // For expenses: budget - actual (positive when under budget)
+          const saldo = isIncomeCategory ? actual - budget : budget - actual;
           return { month, budget, actual, saldo };
         });
         return { ...rest, monthly, children: childViews };
@@ -211,13 +227,15 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
         const key = `${row.categoryId}|${month}`;
         const budget = budgetMap.get(key) ?? 0;
         const actual = spendingMap.get(key) ?? 0;
-        const saldo = budget - actual;
+        // For income: actual - budget (positive when income exceeds budget)
+        // For expenses: budget - actual (positive when under budget)
+        const saldo = isIncomeCategory ? actual - budget : budget - actual;
         return { month, budget, actual, saldo };
       });
 
       return { ...rest, monthly };
     },
-    [budgetMap, spendingMap, visibleMonths]
+    [budgetMap, spendingMap, visibleMonths, incomeCategoryIds]
   );
 
   const baseRowViews = useMemo(
@@ -664,7 +682,12 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
             const isEditable = row.isEditable;
             const isCurrentMonth = cell.month === currentMonth;
             const actualClass = 'text-gray-800';
-            const saldoClass = 'text-gray-800 font-medium';
+            const isIncomeCategory = incomeCategoryIds.has(row.categoryId);
+            // For income: green when positive (actual > budget), gray otherwise
+            // For expenses: gray (positive means under budget, negative means over budget)
+            const saldoClass = isIncomeCategory && cell.saldo > 0 
+              ? 'text-green-600 font-medium' 
+              : 'text-gray-800 font-medium';
             const currentMonthBg = isCurrentMonth ? 'bg-blue-50/50' : '';
             const isFirstColumnInMonth = cellIndex % 3 === 0;
             const monthIndex = Math.floor(cellIndex / 3);
@@ -797,7 +820,9 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                   )}
                 </td>
                 <td className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${saldoClass} ${currentMonthBg}`}>
-                  {formatCurrency(cell.saldo)}
+                  {isIncomeCategory && cell.saldo > 0 
+                    ? `+${formatCurrency(cell.saldo)}` 
+                    : formatCurrency(cell.saldo)}
                 </td>
               </React.Fragment>
             );
@@ -826,7 +851,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                     Faktisk
                   </td>
                   <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
-                    Mangler
+                    Differanse
                   </td>
                 </React.Fragment>
               );
