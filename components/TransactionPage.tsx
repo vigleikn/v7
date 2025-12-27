@@ -26,6 +26,20 @@ import { generateTransactionId } from '../categoryEngine';
 import { saveToBrowser } from '../services/browserPersistence';
 
 // ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * Removes emoji and non-letter characters from the start of a category name
+ * for sorting and searching purposes. Preserves the original name in data.
+ * 
+ * Example: '🍕 Mat ute' → 'Mat ute'
+ */
+const cleanCategoryNameForSort = (name: string): string => {
+  return name.replace(/^[^\p{L}]*/u, '');
+};
+
+// ============================================================================
 // Transaction Filter Bar Component
 // ============================================================================
 
@@ -81,8 +95,13 @@ const TransactionFilterBar: React.FC<TransactionFilterBarProps> = ({
       });
     });
     
-    // Sort alphabetically by name
-    return cats.sort((a, b) => a.name.localeCompare(b.name, 'no'));
+    // Sort alphabetically by name (ignoring emoji at start)
+    return cats.sort((a, b) => 
+      cleanCategoryNameForSort(a.name).localeCompare(
+        cleanCategoryNameForSort(b.name), 
+        'nb'
+      )
+    );
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   const hasActiveFilters = searchValue || dateFromValue || dateToValue || typeValue || categoryValue;
@@ -210,8 +229,13 @@ const BulkActionBar: React.FC<BulkActionBarProps> = ({
       });
     });
     
-    // Sort alphabetically by name
-    return cats.sort((a, b) => a.name.localeCompare(b.name, 'no'));
+    // Sort alphabetically by name (ignoring emoji at start)
+    return cats.sort((a, b) => 
+      cleanCategoryNameForSort(a.name).localeCompare(
+        cleanCategoryNameForSort(b.name), 
+        'nb'
+      )
+    );
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   const handleCategorize = () => {
@@ -320,8 +344,13 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
       });
     });
     
-    // Sort alphabetically by name
-    return cats.sort((a, b) => a.name.localeCompare(b.name, 'no'));
+    // Sort alphabetically by name (ignoring emoji at start)
+    return cats.sort((a, b) => 
+      cleanCategoryNameForSort(a.name).localeCompare(
+        cleanCategoryNameForSort(b.name), 
+        'nb'
+      )
+    );
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   // Format amount without decimals
@@ -757,6 +786,21 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
 
   const selectedCount = selection.selectedIds.size;
 
+  // Calculate sum of selected transactions
+  const selectedTransactionsSum = useMemo(() => {
+    if (selectedCount === 0) return 0;
+    return transactions
+      .filter(tx => selection.selectedIds.has(tx.id))
+      .reduce((sum, tx) => sum + tx.beløp, 0);
+  }, [transactions, selection.selectedIds, selectedCount]);
+
+  // Format sum for display
+  const formattedSum = useMemo(() => {
+    if (selectedCount === 0) return '';
+    const rounded = Math.round(selectedTransactionsSum);
+    return rounded.toLocaleString('no-NO');
+  }, [selectedTransactionsSum, selectedCount]);
+
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar */}
@@ -940,6 +984,11 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
             <div className="text-sm text-gray-600">
               Viser {startIndex + 1}-{Math.min(endIndex, sortedTransactions.length)} av {sortedTransactions.length} transaksjoner
               {selectedCount > 0 && ` • ${selectedCount} valgt`}
+              {selectedCount > 0 && formattedSum && (
+                <span className={selectedTransactionsSum >= 0 ? 'text-green-600' : 'text-red-600'}>
+                  {` • Sum: ${selectedTransactionsSum >= 0 ? '+' : ''}${formattedSum} kr`}
+                </span>
+              )}
               {sortField && sortDirection && (
                 <span className="ml-2 text-blue-600">
                   • Sortert etter {sortField === 'beløp' ? 'Beløp' : 'Tekst'} ({sortDirection === 'asc' ? 'stigende' : 'synkende'})
@@ -1006,6 +1055,11 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
           <div className="mt-4 text-sm text-gray-600">
             Viser {sortedTransactions.length} av {stats.total} transaksjoner
             {selectedCount > 0 && ` • ${selectedCount} valgt`}
+            {selectedCount > 0 && formattedSum && (
+              <span className={selectedTransactionsSum >= 0 ? 'text-green-600' : 'text-red-600'}>
+                {` • Sum: ${selectedTransactionsSum >= 0 ? '+' : ''}${formattedSum} kr`}
+              </span>
+            )}
             {sortField && sortDirection && (
               <span className="ml-2 text-blue-600">
                 • Sortert etter {sortField === 'beløp' ? 'Beløp' : 'Tekst'} ({sortDirection === 'asc' ? 'stigende' : 'synkende'})

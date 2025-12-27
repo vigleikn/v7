@@ -137,9 +137,15 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
 
   const startBalanceMonth = startBalance ? getMonthFromDate(startBalance.date) : null;
 
-  const initialMonth = startBalanceMonth ?? toYearMonth(new Date());
+  // Initialize with current month first (leftmost), respecting startBalanceMonth constraint
+  const initialMonth = startBalanceMonth 
+    ? (compareYearMonth(currentMonth, startBalanceMonth) < 0 
+        ? startBalanceMonth 
+        : currentMonth)
+    : currentMonth;
   const [startMonth, setStartMonth] = useState(initialMonth);
 
+  // Only adjust if startBalanceMonth changes and is later than current view
   useEffect(() => {
     if (startBalanceMonth) {
       setStartMonth((prev) =>
@@ -155,7 +161,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     }
   };
 
-  const visibleMonths = useMemo(() => getMonthSequence(startMonth, 4), [startMonth]);
+  const visibleMonths = useMemo(() => getMonthSequence(startMonth, 3), [startMonth]);
 
   const categoryTree = useMemo(
     () => buildBudgetCategoryTree(hovedkategorier, underkategorier),
@@ -477,7 +483,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
 
   const handlePrev = () => {
     if (!earliestDataMonth) return;
-    const next = shiftMonth(startMonth, -4);
+    const next = shiftMonth(startMonth, -1);
     if (compareYearMonth(next, earliestDataMonth) < 0) {
       setStartMonth(earliestDataMonth);
     } else {
@@ -486,7 +492,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   };
 
   const handleNext = () => {
-    setStartMonth(shiftMonth(startMonth, 4));
+    setStartMonth(shiftMonth(startMonth, 1));
   };
 
   const [draftBudgets, setDraftBudgets] = useState<Record<string, string>>({});
