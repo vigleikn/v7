@@ -5,6 +5,7 @@ import { OversiktPage } from '../components/OversiktPage';
 import { BudgetPage } from '../components/BudgetPage';
 import { BackupPage } from '../components/BackupPage';
 import { HomePage } from '../components/HomePage';
+import { RulesPage } from '../components/RulesPage';
 import { useTransactionStore } from '../src/store';
 import { generateTransactionId } from '../categoryEngine';
 import { setupBrowserPersistence } from '../services/browserPersistence';
@@ -14,7 +15,7 @@ import '../styles/globals.css';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<
-    'hjem' | 'kategorier' | 'transaksjoner' | 'oversikt' | 'budsjett' | 'backup'
+    'hjem' | 'kategorier' | 'transaksjoner' | 'oversikt' | 'budsjett' | 'regler' | 'backup'
   >('hjem');
   const [isInitialized, setIsInitialized] = useState(false);
   const importTransactions = useTransactionStore((state) => state.importTransactions);
@@ -184,6 +185,7 @@ function App() {
       page === 'transaksjoner' ||
       page === 'oversikt' ||
       page === 'budsjett' ||
+      page === 'regler' ||
       page === 'backup'
     ) {
       setCurrentPage(page);
@@ -205,6 +207,10 @@ function App() {
 
   if (currentPage === 'budsjett') {
     return <BudgetPage onNavigate={handleNavigate} />;
+  }
+
+  if (currentPage === 'regler') {
+    return <RulesPage onNavigate={handleNavigate} />;
   }
 
   if (currentPage === 'backup') {

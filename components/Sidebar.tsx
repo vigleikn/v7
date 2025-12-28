@@ -17,6 +17,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate }) => {
     { id: 'kategorier', letter: 'K' },
     { id: 'oversikt', letter: 'O' },
     { id: 'budsjett', letter: 'B' },
+    { id: 'regler', letter: 'R' },
     { id: 'backup', letter: 'I' },
   ];
 
