@@ -11,7 +11,18 @@ import {
   toYearMonth,
   transactionToYearMonth,
   formatMonthHeader,
+  shiftMonth,
 } from '../services/budgetCalculations';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
+import { Card, CardHeader, CardContent } from './ui/card';
 
 interface HomePageProps {
   onNavigate?: (page: string) => void;
@@ -40,12 +51,47 @@ const getDaysInMonth = (year: number, month: number): number => {
   return new Date(year, month, 0).getDate();
 };
 
+const normalizeDateKey = (date: string): string | null => {
+  if (!date) return null;
+  const trimmed = date.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.includes('.')) {
+    const [day, month, yearRaw] = trimmed.split('.');
+    if (!day || !month || !yearRaw) return null;
+    const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw.padStart(4, '0');
+    return `${year}${month.padStart(2, '0')}${day.padStart(2, '0')}`;
+  }
+
+  const parts = trimmed.split('-');
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    if (!year || !month || !day) return null;
+    return `${year.padStart(4, '0')}${month.padStart(2, '0')}${day.padStart(2, '0')}`;
+  }
+
+  if (parts.length === 2) {
+    const [year, month] = parts;
+    if (!year || !month) return null;
+    return `${year.padStart(4, '0')}${month.padStart(2, '0')}01`;
+  }
+
+  return null;
+};
+
+interface DailyBalance {
+  date: string; // YYYY-MM-DD
+  balance: number;
+  dateLabel: string; // Formatert for visning
+}
+
 export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const [activePage] = useState('hjem');
   const [showAll, setShowAll] = useState(false);
   const [activeTile, setActiveTile] = useState<ActiveTile | null>(null);
 
   const transactions = useTransactionStore((state) => state.transactions);
+  const startBalance = useTransactionStore((state) => state.startBalance);
   const hovedkategorier = useTransactionStore((state) =>
     Array.from(state.hovedkategorier.values())
   );
@@ -64,6 +110,108 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
 
   const currentMonth = toYearMonth(new Date());
   const budgetMap = useMemo(() => new Map(budgetEntries), [budgetEntries]);
+
+  // Calculate daily balance for last 3 months
+  const dailyBalances = useMemo((): DailyBalance[] => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const threeMonthsAgo = new Date(today);
+    threeMonthsAgo.setMonth(today.getMonth() - 3);
+    threeMonthsAgo.setDate(1); // Start from first day of month
+
+    // Always start from 3 months ago to show full 3-month period
+    const startDate: Date = new Date(threeMonthsAgo);
+    startDate.setHours(0, 0, 0, 0);
+
+    // Generate all days from startDate to today
+    const days: DailyBalance[] = [];
+    const currentDate = new Date(startDate);
+    currentDate.setHours(0, 0, 0, 0);
+    const endDate = new Date(today);
+    endDate.setHours(0, 0, 0, 0);
+
+    const startKey = startBalance ? normalizeDateKey(startBalance.date) : null;
+    const startBalanceAmount = startBalance?.amount || 0;
+
+    // Ensure we iterate through all days (3 months = ~90 days, add buffer for safety)
+    const maxIterations = 120; // Safety limit
+    let iterations = 0;
+    
+    while (currentDate <= endDate && iterations < maxIterations) {
+      iterations++;
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const dateKey = normalizeDateKey(dateStr);
+
+      if (!dateKey) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        continue;
+      }
+
+      // Calculate balance for this date
+      // startBalance represents the balance AFTER all transactions on that date
+      let balance = 0;
+      
+      if (startBalance && startKey) {
+        if (dateKey === startKey) {
+          // On the startBalance date: use the balance as-is (it's already after all transactions)
+          balance = startBalanceAmount;
+        } else if (dateKey < startKey) {
+          // For dates BEFORE startBalance date: subtract all transactions from this date up to and including startBalance date
+          balance = startBalanceAmount;
+          transactions.forEach((tx) => {
+            if (tx.categoryId === 'overfort') return;
+            const txKey = normalizeDateKey(tx.dato);
+            if (!txKey) return;
+            // Subtract transactions from this date (exclusive) up to and including startBalance date
+            if (txKey > dateKey && txKey <= startKey) {
+              balance -= tx.beløp;
+            }
+          });
+        } else {
+          // For dates AFTER startBalance date: add transactions forward
+          balance = startBalanceAmount;
+          transactions.forEach((tx) => {
+            if (tx.categoryId === 'overfort') return;
+            const txKey = normalizeDateKey(tx.dato);
+            if (!txKey) return;
+            // Add transactions after startBalance date up to and including this date
+            if (txKey > startKey && txKey <= dateKey) {
+              balance += tx.beløp;
+            }
+          });
+        }
+      } else {
+        // No startBalance: just sum all transactions up to this date
+        transactions.forEach((tx) => {
+          if (tx.categoryId === 'overfort') return;
+          const txKey = normalizeDateKey(tx.dato);
+          if (!txKey) return;
+          if (txKey <= dateKey) {
+            balance += tx.beløp;
+          }
+        });
+      }
+
+      // Format date label
+      const day = currentDate.getDate();
+      const month = currentDate.getMonth() + 1;
+      const year = currentDate.getFullYear();
+      const isCurrentMonth = month === today.getMonth() + 1 && year === today.getFullYear();
+      const dateLabel = isCurrentMonth 
+        ? `${day}.${month.toString().padStart(2, '0')}`
+        : `${day}.${month.toString().padStart(2, '0')}.${year.toString().slice(2)}`;
+
+      days.push({
+        date: dateStr,
+        balance: Math.round(balance),
+        dateLabel,
+      });
+
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    return days;
+  }, [transactions, startBalance]);
 
   // Get all expense subcategory IDs (exclude income, savings, overfort)
   const expenseSubcategories = useMemo(() => {
@@ -222,6 +370,79 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
               Oversikt over utgiftskategorier denne måneden
             </p>
           </div>
+
+          {/* Balance Chart */}
+          {dailyBalances.length > 0 ? (
+            <Card className="mb-8">
+              <CardHeader>
+                <h2 className="text-xl font-semibold text-gray-900">Kontobalanse (siste 3 måneder)</h2>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={350}>
+                  <LineChart data={dailyBalances} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="dateLabel"
+                      stroke="#6b7280"
+                      style={{ fontSize: '12px' }}
+                      interval={dailyBalances.length > 30 ? Math.floor(dailyBalances.length / 12) : 0}
+                      angle={-45}
+                      textAnchor="end"
+                      height={80}
+                    />
+                    <YAxis
+                      stroke="#6b7280"
+                      style={{ fontSize: '12px' }}
+                      tickFormatter={(value) => formatCurrency(value)}
+                    />
+                    <Tooltip
+                      formatter={(value: number) => formatCurrency(value)}
+                      labelFormatter={(label) => {
+                        const dataPoint = dailyBalances.find((d) => d.dateLabel === label);
+                        if (dataPoint) {
+                          const date = new Date(dataPoint.date);
+                          return date.toLocaleDateString('no-NO', {
+                            day: 'numeric',
+                            month: 'long',
+                            year: 'numeric',
+                          });
+                        }
+                        return label;
+                      }}
+                      contentStyle={{
+                        backgroundColor: 'white',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        padding: '8px 12px',
+                      }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="balance"
+                      stroke="#3b82f6"
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 6, fill: '#3b82f6' }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card className="mb-8">
+              <CardHeader>
+                <h2 className="text-xl font-semibold text-gray-900">Kontobalanse (siste 3 måneder)</h2>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-12 text-gray-500">
+                  <p className="text-lg mb-2">Ingen balansehistorikk tilgjengelig</p>
+                  <p className="text-sm">
+                    Sørg for å ha satt en startbalanse og importert transaksjoner.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Tiles Grid */}
           <div className="flex flex-wrap gap-4">
