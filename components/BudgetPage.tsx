@@ -797,8 +797,8 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                         const isCurrentMonth = monthYear[0] === currentYear && monthYear[1] === currentMonth;
                         const todayProgress = isCurrentMonth ? (today.getDate() / daysInMonth) * 100 : null;
                         
-                        // Determine color: green if progress hasn't reached today marker, red if it has
-                        const progressColor = todayProgress !== null && progress >= todayProgress ? 'bg-red-500' : 'bg-green-500';
+                        // Determine color: red only when actual >= budget, green otherwise
+                        const progressColor = cell.actual >= cell.budget ? 'bg-red-500' : 'bg-green-500';
                         // Marker color: white if progress has passed, black otherwise
                         const markerColor = todayProgress !== null && progress >= todayProgress ? 'bg-white' : 'bg-black';
                         

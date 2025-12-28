@@ -227,9 +227,11 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
           <div className="flex flex-wrap gap-4">
             {visibleTiles.map((tile) => {
               const progress = tile.budget > 0 ? Math.min((tile.actual / tile.budget) * 100, 100) : 0;
-              const isOverBudget = tile.budget > 0 && tile.actual >= tile.budget * (todayProgress / 100);
+              // Red only when actual >= budget, green otherwise
+              const isOverBudget = tile.budget > 0 && tile.actual >= tile.budget;
               const progressColor = isOverBudget ? 'bg-red-500' : 'bg-green-500';
-              const markerColor = isOverBudget ? 'bg-white' : 'bg-black';
+              // Marker color: white if progress has passed today marker, black otherwise
+              const markerColor = progress >= todayProgress ? 'bg-white' : 'bg-black';
               const isActive = activeTile?.categoryId === tile.categoryId;
 
               return (
