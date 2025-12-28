@@ -477,9 +477,10 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDropOnCard}
-        className={`${isDragOver && isValidDropTarget ? 'ring-4 ring-blue-400 bg-blue-50' : ''}`}
+        className={`flex flex-col break-inside-avoid mb-6 overflow-hidden ${isDragOver && isValidDropTarget ? 'ring-4 ring-blue-400 bg-blue-50' : ''}`}
+        style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}
       >
-        <CardHeader>
+        <CardHeader className="pb-4">
           {/* Header with category name and actions */}
           <div className="flex items-center justify-between">
             {editingName ? (
@@ -490,21 +491,21 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
               />
             ) : (
               <>
-                <div className="flex items-center gap-3">
-                  {hovedkategori.icon && (
-                    <span className="text-2xl">{hovedkategori.icon}</span>
+                <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  {hovedkategori.icon && hovedkategori.icon !== '📁' && (
+                    <span className="text-xl flex-shrink-0">{hovedkategori.icon}</span>
                   )}
-                  <h3 className="text-xl font-semibold">
+                  <h3 className="text-lg font-semibold text-gray-900 truncate">
                     {hovedkategori.name}
                     {hovedkategori.isIncome && (
-                      <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-1 rounded">
+                      <span className="ml-2 text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded font-medium">
                         System
                       </span>
                     )}
                   </h3>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                   {/* Add subcategory button (only if allowed) */}
                   {hovedkategori.allowSubcategories !== false && (
                     <>
@@ -520,11 +521,11 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
                       {/* Bulk add button */}
                       <button
                         onClick={() => setShowBulkAdd(!showBulkAdd)}
-                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 transition-colors"
+                        className="text-xs text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 transition-colors px-1.5 py-1 rounded hover:bg-blue-50"
                         title="Legg til flere underkategorier samtidig"
                       >
-                        <span className="text-base">📝</span>
-                        <span className="hidden sm:inline">Legg til flere</span>
+                        <span className="text-sm">📝</span>
+                        <span className="hidden md:inline">Legg til flere</span>
                       </button>
                     </>
                   )}
@@ -558,7 +559,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
           </div>
         </CardHeader>
 
-        <CardContent>
+        <CardContent className="pt-0 pb-6">
           {/* Bulk add subcategories */}
           {showBulkAdd && (
             <div className="mb-4">
@@ -584,7 +585,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
 
           {/* Underkategorier list */}
           {underkategorier.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {underkategorier.map((underkategori) => {
                 const isDragging = draggedUnderkategori?.id === underkategori.id;
                 
@@ -600,10 +601,10 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
                       e.stopPropagation();
                       onDragEnd();
                     }}
-                    className={`flex items-center justify-between p-3 rounded-md transition-all ${
+                    className={`group flex items-center justify-between p-2.5 rounded-md transition-all duration-150 ${
                       isDragging 
-                        ? 'opacity-50 bg-blue-100 cursor-grabbing scale-105' 
-                        : 'bg-gray-50 hover:bg-gray-100 cursor-grab'
+                        ? 'opacity-50 bg-blue-100 cursor-grabbing scale-105 shadow-md' 
+                        : 'bg-gray-50 hover:bg-gray-200 cursor-grab hover:shadow-sm'
                     }`}
                   >
                     {editingSubcategoryId === underkategori.id ? (
@@ -614,18 +615,19 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
                       />
                     ) : (
                       <>
-                        <span className="text-sm font-medium flex items-center gap-2">
-                          <span className="text-gray-400">✋</span>
-                          <span className="text-gray-400">└─</span>
-                          {underkategori.name}
-                        </span>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <span className="text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs">⋮⋮</span>
+                          <span className="text-sm font-medium text-gray-700 truncate">
+                            {underkategori.name}
+                          </span>
+                        </div>
 
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button
                             size="icon"
                             variant="ghost"
                             onClick={() => setEditingSubcategoryId(underkategori.id)}
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                             title="Endre navn"
                           >
                             <span className="text-sm">✏️</span>
@@ -634,7 +636,7 @@ const CategoryCard: React.FC<CategoryCardProps> = ({
                             size="icon"
                             variant="ghost"
                             onClick={() => setDeletingSubcategoryId(underkategori.id)}
-                            className="h-8 w-8"
+                            className="h-7 w-7"
                             title="Slett underkategori"
                           >
                             <span className="text-sm">🗑️</span>
@@ -714,7 +716,7 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
     if (newCategoryName.trim()) {
       createHovedkategori(newCategoryName.trim(), {
         color: '#3b82f6',
-        icon: '📁',
+        icon: '',
       });
       setNewCategoryName('');
       setShowNewCategoryInput(false);
@@ -815,7 +817,7 @@ export const CategoryPage: React.FC<CategoryPageProps> = ({ onNavigate }) => {
           </div>
 
           {/* Category Cards */}
-          <div className="space-y-6">
+          <div className="columns-1 md:columns-2 lg:columns-3 gap-6">
             {hovedkategorier
               .filter((hk) => !hk.hideFromCategoryPage)
               .map((hovedkategori) => {

@@ -1,0 +1,25 @@
+{
+    "prompts": [
+      {
+        "name": "CSV-import med duplikatsjekk",
+        "description": "Bygg en CSV-parser for transaksjoner.",
+        "prompt": "// Lag en parser som leser CSV med disse kolonnene: Dato, Beløp, Til konto, Til kontonummer, Fra konto, Fra kontonummer, Type, Tekst, Underkategori. Fjern duplikater. Ikke bruk Underkategori-feltet til kategorisering."
+      },
+      {
+        "name": "Auto-kategoriseringsmotor",
+        "description": "Lag en regelmotor som kategoriserer basert på Tekst-feltet.",
+        "prompt": "// Lag en regelmotor som kategoriserer alle transaksjoner med samme 'Tekst'-felt likt, med støtte for unntak som låser enkelttransaksjoner."
+      },
+      {
+        "name": "Kategori-admin UI",
+        "description": "Lag React-komponenter for å redigere hoved- og underkategorier.",
+        "prompt": "// Lag UI-komponenter for å vise og redigere kategorier. Hovedkategorier vises som cards med +, ✏️ og 🗑️. Inntekter er låst og kan ikke slettes eller endres."
+      },
+      {
+        "name": "Transaksjonstabell med filtrering og bulk",
+        "description": "Bygg tabellvisning med søk, filter og bulk-funksjoner.",
+        "prompt": "// Lag en tabell som viser transaksjoner med checkbox, dropdown for kategorisering, søkefelt, dato-filter, og bulk-endringer med unntaksmulighet."
+      }
+    ]
+  }
+  
