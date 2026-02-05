@@ -11,7 +11,6 @@ import {
   toYearMonth,
   transactionToYearMonth,
   formatMonthHeader,
-  shiftMonth,
 } from '../services/budgetCalculations';
 import {
   LineChart,
@@ -80,9 +79,9 @@ const normalizeDateKey = (date: string): string | null => {
 };
 
 interface DailyBalance {
-  date: string; // YYYY-MM-DD
+  date: string;
   balance: number;
-  dateLabel: string; // Formatert for visning
+  dateLabel: string;
 }
 
 export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
@@ -117,13 +116,10 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
     today.setHours(0, 0, 0, 0);
     const threeMonthsAgo = new Date(today);
     threeMonthsAgo.setMonth(today.getMonth() - 3);
-    threeMonthsAgo.setDate(1); // Start from first day of month
+    threeMonthsAgo.setDate(1);
 
-    // Always start from 3 months ago to show full 3-month period
     const startDate: Date = new Date(threeMonthsAgo);
     startDate.setHours(0, 0, 0, 0);
-
-    // Generate all days from startDate to today
     const days: DailyBalance[] = [];
     const currentDate = new Date(startDate);
     currentDate.setHours(0, 0, 0, 0);
@@ -132,11 +128,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
 
     const startKey = startBalance ? normalizeDateKey(startBalance.date) : null;
     const startBalanceAmount = startBalance?.amount || 0;
-
-    // Ensure we iterate through all days (3 months = ~90 days, add buffer for safety)
-    const maxIterations = 120; // Safety limit
+    const maxIterations = 120;
     let iterations = 0;
-    
+
     while (currentDate <= endDate && iterations < maxIterations) {
       iterations++;
       const dateStr = currentDate.toISOString().split('T')[0];
@@ -147,41 +141,33 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         continue;
       }
 
-      // Calculate balance for this date
-      // startBalance represents the balance AFTER all transactions on that date
       let balance = 0;
-      
+
       if (startBalance && startKey) {
         if (dateKey === startKey) {
-          // On the startBalance date: use the balance as-is (it's already after all transactions)
           balance = startBalanceAmount;
         } else if (dateKey < startKey) {
-          // For dates BEFORE startBalance date: subtract all transactions from this date up to and including startBalance date
           balance = startBalanceAmount;
           transactions.forEach((tx) => {
             if (tx.categoryId === 'overfort') return;
             const txKey = normalizeDateKey(tx.dato);
             if (!txKey) return;
-            // Subtract transactions from this date (exclusive) up to and including startBalance date
             if (txKey > dateKey && txKey <= startKey) {
               balance -= tx.beløp;
             }
           });
         } else {
-          // For dates AFTER startBalance date: add transactions forward
           balance = startBalanceAmount;
           transactions.forEach((tx) => {
             if (tx.categoryId === 'overfort') return;
             const txKey = normalizeDateKey(tx.dato);
             if (!txKey) return;
-            // Add transactions after startBalance date up to and including this date
             if (txKey > startKey && txKey <= dateKey) {
               balance += tx.beløp;
             }
           });
         }
       } else {
-        // No startBalance: just sum all transactions up to this date
         transactions.forEach((tx) => {
           if (tx.categoryId === 'overfort') return;
           const txKey = normalizeDateKey(tx.dato);
@@ -192,12 +178,11 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
         });
       }
 
-      // Format date label
       const day = currentDate.getDate();
       const month = currentDate.getMonth() + 1;
       const year = currentDate.getFullYear();
       const isCurrentMonth = month === today.getMonth() + 1 && year === today.getFullYear();
-      const dateLabel = isCurrentMonth 
+      const dateLabel = isCurrentMonth
         ? `${day}.${month.toString().padStart(2, '0')}`
         : `${day}.${month.toString().padStart(2, '0')}.${year.toString().slice(2)}`;
 
@@ -396,7 +381,7 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                       tickFormatter={(value) => formatCurrency(value)}
                     />
                     <Tooltip
-                      formatter={(value: number) => formatCurrency(value)}
+                      formatter={(value: number | undefined) => formatCurrency(value ?? 0)}
                       labelFormatter={(label) => {
                         const dataPoint = dailyBalances.find((d) => d.dateLabel === label);
                         if (dataPoint) {
@@ -448,10 +433,8 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
           <div className="flex flex-wrap gap-4">
             {visibleTiles.map((tile) => {
               const progress = tile.budget > 0 ? Math.min((tile.actual / tile.budget) * 100, 100) : 0;
-              // Red only when actual >= budget, green otherwise
               const isOverBudget = tile.budget > 0 && tile.actual >= tile.budget;
               const progressColor = isOverBudget ? 'bg-red-500' : 'bg-green-500';
-              // Marker color: white if progress has passed today marker, black otherwise
               const markerColor = progress >= todayProgress ? 'bg-white' : 'bg-black';
               const isActive = activeTile?.categoryId === tile.categoryId;
 
@@ -479,24 +462,26 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
                       {formatCurrency(tile.actual)}
                     </div>
 
-                    {/* Progress bar */}
-                    {tile.budget > 0 && (
-                      <div className="relative h-[4px] bg-gray-200 rounded-full overflow-hidden">
-                        {/* Progress fill */}
-                        <div
-                          className={`absolute left-0 top-0 h-full ${progressColor} rounded-full`}
-                          style={{ width: `${progress}%` }}
-                        />
-                        {/* Today marker */}
-                        <div
-                          className={`absolute top-0 w-[2px] h-full ${markerColor}`}
-                          style={{
-                            left: `${todayProgress}%`,
-                            transform: 'translateX(-1px)',
-                          }}
-                        />
-                      </div>
-                    )}
+                    {/* Progress bar – alltid synlig; farge kun når budsjett satt */}
+                    <div className="relative h-[6px] bg-gray-200 rounded-full overflow-hidden">
+                      {/* Progress fill: grønn/rød når budsjett, ellers grå */}
+                      <div
+                        className={`absolute left-0 top-0 h-full rounded-full ${
+                          tile.budget > 0 ? progressColor : 'bg-gray-300'
+                        }`}
+                        style={{
+                          width: tile.budget > 0 ? `${progress}%` : '0%',
+                        }}
+                      />
+                      {/* I-dag-markør */}
+                      <div
+                        className={`absolute top-0 w-[2px] h-full ${tile.budget > 0 ? markerColor : 'bg-gray-500'}`}
+                        style={{
+                          left: `${todayProgress}%`,
+                          transform: 'translateX(-1px)',
+                        }}
+                      />
+                    </div>
 
                     {/* Budget info */}
                     {tile.budget > 0 && (
