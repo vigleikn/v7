@@ -26,6 +26,8 @@ export interface BudgetExportPayload {
   byMonthByCategory: Record<string, Record<string, number>>;
   /** Budsjett per måned per kategori: byMonthBudget[year-month][categoryId] = beløp */
   byMonthBudget: Record<string, Record<string, number>>;
+  /** Individuelle transaksjoner (kompakt format for filstørrelse) */
+  transactions: { d: string; t: string; b: number; c: string }[];
 }
 
 /**
@@ -132,6 +134,16 @@ export function buildBudgetExport(
     });
   }
 
+  // Compact transaction list for PWA drill-down (only categorized transactions)
+  const txList = transactions
+    .filter((tx) => tx.categoryId)
+    .map((tx) => ({
+      d: tx.dato,
+      t: tx.tekst,
+      b: tx.beløp,
+      c: tx.categoryId!,
+    }));
+
   return {
     meta: {
       exportedAt: new Date().toISOString(),
@@ -140,5 +152,6 @@ export function buildBudgetExport(
     byCategory: byCategoryList,
     byMonthByCategory,
     byMonthBudget,
+    transactions: txList,
   };
 }
