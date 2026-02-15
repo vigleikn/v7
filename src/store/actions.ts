@@ -18,6 +18,7 @@ import {
   categorizeTransaction,
   getCategorizationStats,
 } from '../../categoryEngine';
+import { buildBudgetExport } from '../../budgetExport';
 
 import {
   Hovedkategori,
@@ -854,6 +855,16 @@ export function createActions(
     getUncategorizedCount: () => {
       const state = get();
       return state.transactions.filter((t: CategorizedTransaction) => !t.categoryId).length;
+    },
+
+    getBudgetExport: () => {
+      const state = get();
+      return buildBudgetExport(
+        state.transactions,
+        state.hovedkategorier,
+        state.underkategorier,
+        state.budgets ?? new Map()
+      );
     },
   };
 }

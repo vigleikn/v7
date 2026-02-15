@@ -527,6 +527,42 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
   const bulkCategorize = useTransactionStore((state) => state.bulkCategorize);
   const setFilters = useTransactionStore((state) => state.setFilters);
 
+  const [exportStatus, setExportStatus] = useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!exportStatus) return;
+    const t = setTimeout(() => setExportStatus(null), 5000);
+    return () => clearTimeout(t);
+  }, [exportStatus]);
+
+  const handleExportForPhone = async () => {
+    setExportStatus(null);
+    const payload = useTransactionStore.getState().getBudgetExport();
+    const json = JSON.stringify(payload, null, 2);
+    try {
+      const res = await fetch('http://localhost:3001/api/save-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: json,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setExportStatus('Lagret til iCloud-mappen Regnskap');
+        return;
+      }
+    } catch {
+      /* server ikke kjørende – fall til nedlasting */
+    }
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'budget-export.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    setExportStatus('Lastet ned (start export-server for å lagre direkte til iCloud)');
+  };
+
   // Sync filters to store whenever they change
   React.useEffect(() => {
     const categoryIds = categoryValue === '__uncategorized' 
@@ -819,15 +855,24 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
               </p>
             </div>
 
-            {/* Import CSV Button */}
+            {/* Import CSV + Export for phone */}
             <div className="flex flex-col items-end gap-2">
-              <Button
-                onClick={handleImportClick}
-                disabled={isImporting}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {isImporting ? '⏳ Importerer...' : '📄 Importer CSV'}
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleExportForPhone}
+                  variant="outline"
+                  className="border-gray-300"
+                >
+                  📱 Eksporter til telefon
+                </Button>
+                <Button
+                  onClick={handleImportClick}
+                  disabled={isImporting}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {isImporting ? '⏳ Importerer...' : '📄 Importer CSV'}
+                </Button>
+              </div>
               
               {/* Hidden file input */}
               <input
@@ -848,6 +893,12 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                     : 'bg-blue-100 text-blue-800'
                 }`}>
                   {importStatus}
+                </div>
+              )}
+              {/* Export status */}
+              {exportStatus && (
+                <div className="text-sm px-3 py-1 rounded bg-blue-100 text-blue-800">
+                  {exportStatus}
                 </div>
               )}
             </div>

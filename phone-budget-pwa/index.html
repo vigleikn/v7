@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1e293b" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Budsjett</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>Budsjett</h1>
+      <button type="button" id="btn-load" class="btn btn-primary">Last inn fra iCloud</button>
+      <input type="file" id="file-input" accept=".json,application/json" hidden />
+    </header>
+
+    <main class="main">
+      <section id="no-data" class="card no-data">
+        <p>Last inn en <strong>budget-export.json</strong> fra din delte iCloud-mappe for å se oversikten.</p>
+        <p class="hint">Bruk knappen «Last inn fra iCloud» og velg filen.</p>
+      </section>
+
+      <section id="has-data" class="has-data" hidden>
+        <div class="meta card" id="meta"></div>
+        <section class="card month-view">
+          <div class="month-nav" id="month-nav">
+            <button type="button" class="nav-arrow" id="btn-prev" aria-label="Forrige måned">←</button>
+            <h2 class="month-title" id="month-title"></h2>
+            <button type="button" class="nav-arrow" id="nav-next" aria-label="Neste måned">→</button>
+          </div>
+          <div class="month-total" id="month-total" hidden>
+            <p class="total-label">Forbruk mot budsjett</p>
+            <p class="total-value" id="total-value"></p>
+            <div class="bar-track" id="bar-track"><div class="bar-fill" id="bar-fill"></div></div>
+          </div>
+          <p class="no-data hint" id="month-hint" hidden></p>
+          <ul id="month-categories" class="category-list"></ul>
+        </section>
+      </section>
+    </main>
+  </div>
+  <script src="app.js"></script>
+</body>
+</html>

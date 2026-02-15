@@ -9,6 +9,7 @@ import {
   TransactionLock,
   CategorizedTransaction,
 } from '../../categoryEngine';
+import type { BudgetExportPayload } from '../../budgetExport';
 
 // Re-export for convenience
 export type { CategorizedTransaction };
@@ -187,6 +188,7 @@ export interface TransactionStoreActions {
   getAllCategoriesFlat: () => AppCategory[];
   getSelectedTransactions: () => CategorizedTransaction[];
   getUncategorizedCount: () => number;
+  getBudgetExport: () => BudgetExportPayload;
 }
 
 export type TransactionStore = TransactionStoreState & TransactionStoreActions;

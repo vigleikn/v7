@@ -637,13 +637,12 @@ export const useTransactionStore = create<TransactionStore>()(
         bulkCategorize: (payload) => {
           set(state => {
             const { transactionIds, categoryId, createRule, lockTransactions, lockReason } = payload;
-            
-            transactionIds.forEach(txId => {
-              const tx = state.transactions.find(t => t.transactionId === txId);
+            // transactionIds from UI are row ids (transaction.id), not content hashes
+            transactionIds.forEach(rowId => {
+              const tx = state.transactions.find(t => t.id === rowId);
               if (!tx) return;
-              
               if (lockTransactions) {
-                state.locks = lockTransaction(state.locks, txId, categoryId, lockReason);
+                state.locks = lockTransaction(state.locks, tx.transactionId, categoryId, lockReason);
               } else if (createRule) {
                 state.rules = setRule(state.rules, tx.tekst, categoryId);
               }
