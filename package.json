@@ -11,7 +11,9 @@
     "export-server": "node server/export-server.cjs",
     "start": "tsx quickstart.ts",
     "example": "tsx example.ts",
-    "test": "tsx test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:legacy": "tsx test.ts",
     "category:example": "tsx categoryEngineExample.ts",
     "category:test": "tsx categoryEngineTest.ts",
     "store:test": "tsx storeTest.ts",
@@ -41,17 +43,21 @@
     "zustand": "^4.4.7"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^20.10.0",
     "@types/react": "^18.2.45",
     "@types/react-dom": "^18.2.18",
     "@vitejs/plugin-react": "^4.2.1",
     "autoprefixer": "^10.4.16",
+    "concurrently": "^9.1.0",
+    "jsdom": "^28.1.0",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",
-    "vite": "^5.0.8"
+    "vite": "^5.0.8",
+    "vitest": "^4.0.18"
   },
   "peerDependencies": {
     "react": ">=16.8.0"

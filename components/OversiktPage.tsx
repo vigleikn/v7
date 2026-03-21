@@ -6,6 +6,7 @@
 import React, { useState, useMemo } from 'react';
 import { ChevronRight, ChevronDown } from 'lucide-react';
 import { Sidebar } from './Sidebar';
+import { RedactedValue } from './RedactedValue';
 import { useTransactionStore } from '../src/store';
 import {
   getLast12Months,
@@ -37,6 +38,19 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
   const underkategorier = useTransactionStore((state) => 
     Array.from(state.underkategorier.values())
   );
+  const redactSensitive = useTransactionStore((state) => state.redactSensitive);
+
+  const incomeCategoryIds = useMemo(() => {
+    const ids = new Set<string>();
+    const incomeHk = hovedkategorier.find(
+      (hk) => hk.id === 'cat_inntekter_default' || hk.name === 'Inntekter'
+    );
+    if (incomeHk) {
+      ids.add(incomeHk.id);
+      incomeHk.underkategorier?.forEach((ukId) => ids.add(ukId));
+    }
+    return ids;
+  }, [hovedkategorier]);
 
   const handleNavigate = (page: string) => {
     if (onNavigate) {
@@ -130,6 +144,9 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
     const isBalanceRow = row.categoryId === '__balance';
     const isMainCategory = level === 0 && !isBalanceRow;
     const isExpenseGroup = level === 1; // All level 1 items (under Utgifter)
+    const shouldRedact = redactSensitive && (
+      row.categoryId === '__expenses' || incomeCategoryIds.has(row.categoryId)
+    );
     
     // Determine if cells in this row are clickable (drill-down)
     // Only subcategories and leaf categories can show transactions
@@ -226,24 +243,24 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
                   );
                 }}
               >
-                {formatAmount(value)}
+                <RedactedValue value={formatAmount(value)} isRedacted={shouldRedact} />
               </td>
             );
           })}
 
           {/* Sum */}
           <td className={`px-3 py-3 text-right tabular-nums ${fontWeight} ${textColor} bg-gray-50`}>
-            {formatAmount(row.sum)}
+            <RedactedValue value={formatAmount(row.sum)} isRedacted={shouldRedact} />
           </td>
 
           {/* Avg */}
           <td className={`px-3 py-3 text-right tabular-nums ${textColor}`}>
-            {formatAmount(row.avg)}
+            <RedactedValue value={formatAmount(row.avg)} isRedacted={shouldRedact} />
           </td>
 
           {/* Coefficient of Variation (CV) */}
           <td className={`px-3 py-3 text-right tabular-nums text-gray-600 text-sm`}>
-            {row.cv !== null ? `${row.cv.toFixed(1)} %` : '–'}
+            <RedactedValue value={row.cv !== null ? `${row.cv.toFixed(1)} %` : '–'} isRedacted={shouldRedact} />
           </td>
         </tr>
 

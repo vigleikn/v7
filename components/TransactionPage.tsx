@@ -7,6 +7,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useTransactionStore, selectFilteredTransactions, selectHovedkategorier } from '../src/store';
 import { CategorizedTransaction } from '../src/store';
+import { RedactedValue } from './RedactedValue';
 import { Sidebar } from './Sidebar';
 import { Card, CardHeader, CardContent } from './ui/card';
 import { Button } from './ui/button';
@@ -320,9 +321,24 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
   onCategorize,
 }) => {
   const hovedkategorier = useTransactionStore(selectHovedkategorier);
+  const redactSensitive = useTransactionStore((state) => state.redactSensitive);
   const getHovedkategoriWithUnderkategorier = useTransactionStore(
     (state) => state.getHovedkategoriWithUnderkategorier
   );
+
+  const incomeCategoryIds = useMemo(() => {
+    const ids = new Set<string>();
+    const incomeHk = hovedkategorier.find(
+      (hk) => hk.id === 'cat_inntekter_default' || hk.name === 'Inntekter'
+    );
+    if (incomeHk) {
+      ids.add(incomeHk.id);
+      incomeHk.underkategorier?.forEach((ukId) => ids.add(ukId));
+    }
+    return ids;
+  }, [hovedkategorier]);
+
+  const isIncomeTx = !!transaction.categoryId && incomeCategoryIds.has(transaction.categoryId);
 
   // Get all categories flat for dropdown
   // Rules: Only show subcategories OR hovedkategorier without subcategories (like Overført)
@@ -412,8 +428,12 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
       </TableCell>
 
       {/* Amount */}
-      <TableCell className={`w-[7rem] font-semibold whitespace-nowrap text-right ${amountColor}`}>
-        {formattedAmount}
+      <TableCell className="w-[7rem] font-semibold whitespace-nowrap text-right">
+        <RedactedValue
+          value={formattedAmount}
+          isRedacted={redactSensitive && isIncomeTx}
+          className={amountColor}
+        />
       </TableCell>
 
       {/* Type */}

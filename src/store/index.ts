@@ -71,10 +71,12 @@ export const useTransactionStore = create<TransactionStore>()(
         selection: initialSelection,
         isLoading: false,
         error: null,
+        redactSensitive: false,
         stats: initialStats,
         
         // Actions
         ...createActions(set, get),
+        setRedactSensitive: (value: boolean) => set({ redactSensitive: value }),
       })),
       {
         name: 'transaction-store',

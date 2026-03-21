@@ -10,9 +10,11 @@ import {
   ChevronDown,
   ChevronRight as ChevronRightIcon,
   PiggyBank,
+  Copy,
 } from 'lucide-react';
 import { shallow } from 'zustand/shallow';
 import { Sidebar } from './Sidebar';
+import { RedactedValue } from './RedactedValue';
 import { useTransactionStore } from '../src/store';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -116,6 +118,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     amount: '',
     date: '',
   });
+  const [copyTargetMonth, setCopyTargetMonth] = useState<string | null>(null);
 
   const transactions = useTransactionStore((state) => state.transactions);
   const hovedkategorier = useTransactionStore((state) =>
@@ -132,6 +135,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
   const currentMonth = toYearMonth(new Date());
   const setBudget = useTransactionStore((state) => state.setBudget);
   const setStartBalance = useTransactionStore((state) => state.setStartBalance);
+  const redactSensitive = useTransactionStore((state) => state.redactSensitive);
 
   const budgetMap = useMemo(() => new Map(budgetEntries), [budgetEntries]);
 
@@ -603,6 +607,31 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     });
   };
 
+  const previousMonthHasBudget = useCallback(
+    (month: string): boolean => {
+      const prev = shiftMonth(month, -1);
+      return editableCategoryIds.some((catId) => {
+        const val = budgetMap.get(`${catId}|${prev}`);
+        return val !== undefined && val > 0;
+      });
+    },
+    [editableCategoryIds, budgetMap]
+  );
+
+  const copyBudgetFromPreviousMonth = useCallback(
+    (targetMonth: string) => {
+      const prev = shiftMonth(targetMonth, -1);
+      editableCategoryIds.forEach((catId) => {
+        const val = budgetMap.get(`${catId}|${prev}`);
+        if (val !== undefined && val > 0) {
+          setBudget(catId, targetMonth, val);
+        }
+      });
+      setCopyTargetMonth(null);
+    },
+    [editableCategoryIds, budgetMap, setBudget]
+  );
+
   const openStartBalanceModal = () => {
     setStartBalanceDraft({
       amount: startBalance ? startBalance.amount.toString() : '',
@@ -641,6 +670,9 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
     const isExpanded = expandedCategories.has(row.categoryId);
     const hasChildren = !!row.children && row.children.length > 0;
     const isMain = level === 0 && row.categoryId !== '__expenses_total' && row.categoryId !== '__balance_row';
+    const shouldRedact = redactSensitive && (
+      row.categoryId === '__expenses_total' || incomeCategoryIds.has(row.categoryId)
+    );
 
     const baseRowColor =
       row.categoryId === '__balance_row'
@@ -666,8 +698,8 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
           }}
         >
           <td
-            className="px-4 py-1 text-sm font-medium text-gray-800"
-            style={{ paddingLeft: `${level * 1.5 + 1}rem` }}
+            className="px-2 py-1 text-sm font-medium text-gray-800 max-w-[10rem]"
+            style={{ paddingLeft: `${level * 1.25 + 0.5}rem` }}
           >
             <div className="flex items-center">
               {hasChildren && (
@@ -689,15 +721,13 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
             const isCurrentMonth = cell.month === currentMonth;
             const actualClass = 'text-gray-800';
             const isIncomeCategory = incomeCategoryIds.has(row.categoryId);
-            // For income: green when positive (actual > budget), gray otherwise
-            // For expenses: gray (positive means under budget, negative means over budget)
-            const saldoClass = isIncomeCategory && cell.saldo > 0 
-              ? 'text-green-600 font-medium' 
+            const saldoClass = isIncomeCategory
+              ? (cell.saldo < 0 ? 'text-red-600 font-medium' : 'text-green-600 font-medium')
               : 'text-gray-800 font-medium';
             const currentMonthBg = isCurrentMonth ? 'bg-blue-50/50' : '';
             const isFirstColumnInMonth = cellIndex % 3 === 0;
             const monthIndex = Math.floor(cellIndex / 3);
-            const monthSpacing = isFirstColumnInMonth && monthIndex > 0 ? 'ml-4' : '';
+            const monthSpacing = isFirstColumnInMonth && monthIndex > 0 ? 'border-l-2 border-gray-200 pl-3' : '';
 
             // Determine if "Balanse nå" cell is clickable
             // Only subcategories (level === 1) and "Ukategorisert" (__uncategorized)
@@ -741,12 +771,12 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                           }}
                           className="w-full text-right block text-sm text-gray-700 font-medium px-2 py-2 rounded-md border border-transparent hover:border-gray-300 transition-colors"
                         >
-                          {formatCurrency(cell.budget)}
+                          <RedactedValue value={formatCurrency(cell.budget)} isRedacted={shouldRedact} />
                         </button>
                       )
                     ) : (
                       <span className="block text-sm text-gray-700 font-medium">
-                        {formatCurrency(cell.budget)}
+                        <RedactedValue value={formatCurrency(cell.budget)} isRedacted={shouldRedact} />
                       </span>
                     )}
                   </div>
@@ -780,7 +810,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                     }
                   }}
                 >
-                  {formatCurrency(cell.actual)}
+                  <RedactedValue value={formatCurrency(cell.actual)} isRedacted={shouldRedact} />
                   {cell.budget > 0 && 
                    row.categoryId !== '__balance_row' && 
                    row.categoryId !== 'cat_inntekter_default' && (
@@ -797,8 +827,9 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                         const isCurrentMonth = monthYear[0] === currentYear && monthYear[1] === currentMonth;
                         const todayProgress = isCurrentMonth ? (today.getDate() / daysInMonth) * 100 : null;
                         
-                        // Determine color: red only when actual >= budget, green otherwise
-                        const progressColor = cell.actual >= cell.budget ? 'bg-red-500' : 'bg-green-500';
+                        const progressColor = isIncomeCategory
+                          ? (cell.actual < cell.budget ? 'bg-red-500' : 'bg-green-500')
+                          : (cell.actual >= cell.budget ? 'bg-red-500' : 'bg-green-500');
                         // Marker color: white if progress has passed, black otherwise
                         const markerColor = todayProgress !== null && progress >= todayProgress ? 'bg-white' : 'bg-black';
                         
@@ -826,9 +857,12 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                   )}
                 </td>
                 <td className={`px-2 py-1 text-right align-middle text-sm min-w-[5rem] ${saldoClass} ${currentMonthBg}`}>
-                  {isIncomeCategory && cell.saldo > 0 
-                    ? `+${formatCurrency(cell.saldo)}` 
-                    : formatCurrency(cell.saldo)}
+                  <RedactedValue
+                    value={isIncomeCategory && cell.saldo > 0 
+                      ? `+${formatCurrency(cell.saldo)}` 
+                      : formatCurrency(cell.saldo)}
+                    isRedacted={shouldRedact}
+                  />
                 </td>
               </React.Fragment>
             );
@@ -844,19 +878,19 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
         <React.Fragment key={row.categoryId}>
           {rowBody}
           <tr className="bg-gray-50 border-b border-gray-200 h-[45px]">
-            <td className="px-4 py-1" />
+            <td className="px-2 py-1" />
             {visibleMonths.map((month, monthIndex) => {
               const isCurrentMonth = month === currentMonth;
-              const monthSpacing = monthIndex > 0 ? 'ml-4' : '';
+              const monthSpacing = monthIndex > 0 ? 'border-l-2 border-gray-200 pl-3' : '';
               return (
                 <React.Fragment key={`balance-subheader-${month}`}>
-                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
+                  <td className={`px-2 py-1 text-center text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
                     Forventet
                   </td>
-                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                  <td className={`px-2 py-1 text-center text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
                     Faktisk
                   </td>
-                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                  <td className={`px-2 py-1 text-center text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
                     Differanse
                   </td>
                 </React.Fragment>
@@ -871,19 +905,19 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
       return (
         <React.Fragment key={row.categoryId}>
           <tr className="bg-gray-50 border-t border-gray-200 h-[45px]">
-            <td className="px-4 py-1" />
+            <td className="px-2 py-1" />
             {visibleMonths.map((month, monthIndex) => {
               const isCurrentMonth = month === currentMonth;
-              const monthSpacing = monthIndex > 0 ? 'ml-4' : '';
+              const monthSpacing = monthIndex > 0 ? 'border-l-2 border-gray-200 pl-3' : '';
               return (
                 <React.Fragment key={`expenses-heading-${month}`}>
-                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
+                  <td className={`px-2 py-1 text-center text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
                     Øremerket
                   </td>
-                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                  <td className={`px-2 py-1 text-center text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
                     Brukt
                   </td>
-                  <td className={`px-2 py-1 text-right text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                  <td className={`px-2 py-1 text-center text-xs font-semibold text-gray-600 min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
                     Rest
                   </td>
                 </React.Fragment>
@@ -950,7 +984,7 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
               <thead className="bg-gray-100 border-b border-gray-200">
                 <tr>
                   <th
-                    className="px-4 py-3 text-left font-semibold text-gray-700 align-middle"
+                    className="px-2 py-3 text-left font-semibold text-gray-700 align-middle max-w-[10rem]"
                     scope="col"
                   >
                     <button
@@ -968,10 +1002,19 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                       <th
                         key={`month-${month}`}
                         colSpan={3}
-                        className={`px-3 py-3 text-center font-semibold text-gray-700 relative ${isCurrentMonth ? 'bg-blue-50/50 border-l-2 border-r-2 border-blue-200' : ''}`}
+                        className={`px-3 py-3 text-center font-semibold text-gray-700 relative ${isCurrentMonth ? 'bg-blue-50/50 border-l-2 border-r-2 border-blue-200' : ''} ${index > 0 ? 'border-l-2 border-gray-200' : ''}`}
                         scope="colgroup"
                       >
                         <span>{formatMonthHeader(month)}</span>
+                        {previousMonthHasBudget(month) && (
+                          <button
+                            onClick={() => setCopyTargetMonth(month)}
+                            className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-gray-500 hover:text-gray-800 hover:bg-gray-200 transition-colors"
+                            title={`Kopier budsjett fra ${formatMonthHeader(shiftMonth(month, -1))}`}
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        )}
                         {index === visibleMonths.length - 1 && (
                           <button
                             onClick={handleNext}
@@ -986,21 +1029,21 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
                   })}
                 </tr>
                 <tr className="bg-white border-t border-gray-200 h-[45px]">
-                  <th className="px-4 py-1 text-xs font-semibold text-gray-500 text-left">
+                  <th className="px-2 py-1 text-xs font-semibold text-gray-500 text-left">
                     
                   </th>
                   {visibleMonths.map((month, monthIndex) => {
                     const isCurrentMonth = month === currentMonth;
-                    const monthSpacing = monthIndex > 0 ? 'ml-4' : '';
+                    const monthSpacing = monthIndex > 0 ? 'border-l-2 border-gray-200 pl-3' : '';
                     return (
                       <React.Fragment key={`summary-${month}`}>
-                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-right min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
+                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-center min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''} ${monthSpacing}`}>
                           Til øremerking
                         </th>
-                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-right min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-center min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
                           Balanse nå
                         </th>
-                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-right min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
+                        <th className={`px-2 py-1 text-xs font-semibold text-gray-500 text-center min-w-[5rem] ${isCurrentMonth ? 'bg-blue-50/50' : ''}`}>
                           Risiko
                         </th>
                       </React.Fragment>
@@ -1136,6 +1179,31 @@ export const BudgetPage: React.FC<BudgetPageProps> = ({ onNavigate }) => {
             </AlertDialogAction>
             <AlertDialogAction onClick={handleStartBalanceSave}>
               Lagre
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!copyTargetMonth} onOpenChange={(open) => { if (!open) setCopyTargetMonth(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kopier budsjett?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {copyTargetMonth && (
+                <>
+                  Budsjett fra <strong>{formatMonthHeader(shiftMonth(copyTargetMonth, -1))}</strong> kopieres
+                  til <strong>{formatMonthHeader(copyTargetMonth)}</strong>.
+                  Eksisterende budsjettverdier blir overskrevet.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCopyTargetMonth(null)}>
+              Avbryt
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => copyTargetMonth && copyBudgetFromPreviousMonth(copyTargetMonth)}>
+              Kopier
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

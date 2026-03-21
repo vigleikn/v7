@@ -99,6 +99,8 @@ export interface TransactionStoreState {
   selection: TransactionSelectionState;
   isLoading: boolean;
   error: string | null;
+  /** When true, income and summary values are visually redacted (demo mode). Transient — not persisted. */
+  redactSensitive: boolean;
   
   // Derived state
   stats: {
@@ -189,6 +191,9 @@ export interface TransactionStoreActions {
   getSelectedTransactions: () => CategorizedTransaction[];
   getUncategorizedCount: () => number;
   getBudgetExport: () => BudgetExportPayload;
+
+  // Redaction (demo mode)
+  setRedactSensitive: (value: boolean) => void;
 }
 
 export type TransactionStore = TransactionStoreState & TransactionStoreActions;

@@ -3,9 +3,10 @@
  * Shows 16 expense subcategories for current month as responsive tiles
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import { Sidebar } from './Sidebar';
 import { useTransactionStore } from '../src/store';
+import { EyeOff, Eye } from 'lucide-react';
 import {
   computeMonthlySpending,
   toYearMonth,
@@ -100,6 +101,9 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
   const budgetEntries = useTransactionStore((state) =>
     Array.from(state.budgets.entries())
   );
+  const redactSensitive = useTransactionStore((state) => state.redactSensitive);
+  const setRedactSensitive = useTransactionStore((state) => state.setRedactSensitive);
+  const toggleRedact = useCallback(() => setRedactSensitive(!redactSensitive), [redactSensitive, setRedactSensitive]);
 
   const handleNavigate = (page: string) => {
     if (onNavigate) {
@@ -349,11 +353,25 @@ export const HomePage: React.FC<HomePageProps> = ({ onNavigate }) => {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-[1600px] mx-auto p-8">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900">Forbruk {formatMonthHeader(currentMonth)}</h1>
-            <p className="text-gray-600 mt-2">
-              Oversikt over utgiftskategorier denne måneden
-            </p>
+          <div className="mb-8 flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Forbruk {formatMonthHeader(currentMonth)}</h1>
+              <p className="text-gray-600 mt-2">
+                Oversikt over utgiftskategorier denne måneden
+              </p>
+            </div>
+            <button
+              onClick={toggleRedact}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                redactSensitive
+                  ? 'bg-gray-800 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+              title={redactSensitive ? 'Vis sensitive beløp' : 'Skjul sensitive beløp (demo)'}
+            >
+              {redactSensitive ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              {redactSensitive ? 'Demo' : 'Demo'}
+            </button>
           </div>
 
           {/* Balance Chart */}
