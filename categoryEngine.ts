@@ -60,9 +60,22 @@ export interface ApplyRulesResult {
 // ============================================================================
 
 /**
- * Generates a unique transaction ID based on transaction properties
+ * Generates a unique transaction ID.
+ * Prefers the bank-provided ID (from Excel import) when available.
+ * Falls back to content hash for legacy CSV-imported data.
  */
 export function generateTransactionId(transaction: Transaction): string {
+  if (transaction.bankId) {
+    return transaction.bankId;
+  }
+  return `${transaction.dato}|${transaction.beløp}|${transaction.type}|${transaction.tekst}|${transaction.fraKonto}|${transaction.tilKonto}`;
+}
+
+/**
+ * Generates a content-hash ID regardless of whether bankId exists.
+ * Used for migrating locks from old content-hash keys to bank-ID keys.
+ */
+export function generateContentHash(transaction: Transaction): string {
   return `${transaction.dato}|${transaction.beløp}|${transaction.type}|${transaction.tekst}|${transaction.fraKonto}|${transaction.tilKonto}`;
 }
 

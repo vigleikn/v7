@@ -13,11 +13,11 @@ export interface Transaction {
   type: string;
   tekst: string;
   underkategori: string;
-  // Additional fields from the actual CSV
   originaltBeløp?: number;
   originalValuta?: string;
   kid?: string;
   hovedkategori?: string;
+  bankId?: string;
 }
 
 export interface ParseResult {

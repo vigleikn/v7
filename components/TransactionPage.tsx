@@ -22,8 +22,8 @@ import {
   TableHead,
   TableCell,
 } from './ui/table';
-import { parseCSV } from '../csvParser';
-import { generateTransactionId } from '../categoryEngine';
+import { parseExcel } from '../excelParser';
+import { generateTransactionId, generateContentHash } from '../categoryEngine';
 import { saveToBrowser } from '../services/browserPersistence';
 
 // ============================================================================
@@ -486,7 +486,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
         </div>
       </TableCell>
 
-      {/* Importert (from CSV) */}
+      {/* Importert (from Excel) */}
       <TableCell className="w-[12rem] text-sm text-gray-500 italic">
         {transaction.underkategori || '-'}
       </TableCell>
@@ -727,8 +727,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
     });
   };
 
-  // CSV Import Handler
-  const handleCSVImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -736,100 +735,145 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
     setImportStatus(null);
 
     try {
-      // Read file content
-      const fileContent = await file.text();
+      const buffer = await file.arrayBuffer();
+      const parseResult = parseExcel(buffer);
 
-      // Parse CSV (all rows, no internal duplicate checking)
-      const parseResult = parseCSV(fileContent);
+      console.log(`📄 Excel parsed: ${parseResult.originalCount} transaksjoner`);
 
-      console.log(`📄 CSV parsed: ${parseResult.originalCount} transaksjoner`);
-
-      // Convert to categorized transactions with UUID
       const newTransactions = parseResult.transactions.map((tx) => ({
         ...tx,
-        id: crypto.randomUUID(), // Unique UUID for each transaction
-        transactionId: generateTransactionId(tx), // Content hash for duplicate detection
-        categoryId: undefined,
+        id: crypto.randomUUID(),
+        transactionId: generateTransactionId(tx),
+        categoryId: undefined as string | undefined,
         isLocked: false,
       }));
 
-      // Check for duplicates against existing transactions in store
-      // Uses transactionId (content hash) for duplicate detection
-      // Note: New transactions already have UUID (id), but duplicates are matched by content
-      const existingContentHashes = new Set(transactions.map((t) => t.transactionId));
-      const duplicateTransactions = newTransactions.filter(
-        (tx) => existingContentHashes.has(tx.transactionId)
+      // Dual lookup: by transactionId (for Excel reimport) and by content hash (for CSV->Excel migration)
+      const existingByTransactionId = new Map(
+        transactions.map((t) => [t.transactionId, t])
       );
-      const uniqueNewTransactions = newTransactions.filter(
-        (tx) => !existingContentHashes.has(tx.transactionId)
-      );
-
-      const duplicatesCount = duplicateTransactions.length;
-      const newCount = uniqueNewTransactions.length;
-
-      console.log(`📊 Import analysis:`);
-      console.log(`   CSV rows parsed: ${parseResult.originalCount}`);
-      console.log(`   Existing in store: ${transactions.length}`);
-      console.log(`   New transactions: ${newCount}`);
-      console.log(`   Duplicates skipped: ${duplicatesCount}`);
-      
-      // Log duplicates if any
-      if (duplicatesCount > 0) {
-        console.log(`\n⛔ Duplikater funnet (viser de ${Math.min(10, duplicatesCount)} første):`);
-        duplicateTransactions.slice(0, 10).forEach((dup, i) => {
-          const beløp = Math.round(dup.beløp);
-          const arrow = dup.beløp < 0 ? '→' : '←';
-          console.log(`   ${i + 1}. [${dup.dato}] ${beløp} kr • ${dup.tekst} • ${dup.fraKontonummer || 'N/A'} ${arrow} ${dup.tilKontonummer || 'N/A'}`);
-          console.log(`       Content hash: ${dup.transactionId.substring(0, 50)}...`);
-        });
+      const existingByContentHash = new Map<string, typeof transactions[number]>();
+      for (const t of transactions) {
+        const hash = generateContentHash(t);
+        if (!existingByContentHash.has(hash)) {
+          existingByContentHash.set(hash, t);
+        }
       }
 
-      if (uniqueNewTransactions.length === 0) {
-        const message = `ℹ️ Ingen nye transaksjoner - alle ${duplicatesCount} finnes allerede i systemet`;
+      const duplicates: typeof newTransactions = [];
+      const brandNew: typeof newTransactions = [];
+      const pendingUpdated: typeof newTransactions = [];
+      const migrated: typeof newTransactions = [];
+
+      for (const tx of newTransactions) {
+        // 1) Direct match on transactionId (handles Excel-to-Excel reimport)
+        const byId = existingByTransactionId.get(tx.transactionId);
+        if (byId) {
+          if (byId.beløp !== tx.beløp || byId.tekst !== tx.tekst || byId.dato !== tx.dato) {
+            pendingUpdated.push({ ...tx, id: byId.id, categoryId: byId.categoryId, isLocked: byId.isLocked });
+          } else {
+            duplicates.push(tx);
+          }
+          continue;
+        }
+
+        // 2) Content-hash match (handles CSV->Excel migration)
+        const contentHash = generateContentHash(tx);
+        const byHash = existingByContentHash.get(contentHash);
+        if (byHash) {
+          migrated.push({
+            ...tx,
+            id: byHash.id,
+            categoryId: byHash.categoryId,
+            isLocked: byHash.isLocked,
+          });
+          existingByContentHash.delete(contentHash);
+          continue;
+        }
+
+        // 3) No match at all
+        brandNew.push(tx);
+      }
+
+      // Lock migration: move locks from old content-hash keys to new bank-ID keys
+      let locksMigrated = 0;
+      const storeState = useTransactionStore.getState();
+      const locks = storeState.locks;
+      if (locks && locks.size > 0) {
+        const candidates = [...brandNew, ...pendingUpdated, ...migrated];
+        for (const tx of candidates) {
+          if (!tx.bankId) continue;
+          const contentHash = generateContentHash(tx);
+          const existingLock = locks.get(contentHash);
+          if (existingLock && !locks.has(tx.transactionId)) {
+            storeState.lockTransactionAction(tx.transactionId, existingLock.categoryId);
+            storeState.unlockTransactionAction(contentHash);
+            locksMigrated++;
+          }
+        }
+      }
+
+      console.log(`📊 Import analysis:`);
+      console.log(`   Excel rows: ${parseResult.originalCount}`);
+      console.log(`   Existing in store: ${transactions.length}`);
+      console.log(`   Brand new: ${brandNew.length}`);
+      console.log(`   Migrated (CSV→Excel): ${migrated.length}`);
+      console.log(`   Pending updated: ${pendingUpdated.length}`);
+      console.log(`   Duplicates skipped: ${duplicates.length}`);
+      console.log(`   Locks migrated: ${locksMigrated}`);
+
+      if (brandNew.length === 0 && pendingUpdated.length === 0 && migrated.length === 0) {
+        const message = `ℹ️ Ingen nye transaksjoner – alle ${duplicates.length} finnes allerede`;
         setImportStatus(message);
-        console.log(`\n${message}`);
         return;
       }
 
-      console.log(`\n✨ Importing ${newCount} new transactions with UUID...`);
+      // Apply in-place updates (migrated + pending) to existing transactions
+      let updatedTransactions = [...transactions];
+      const updateMap = new Map(
+        [...migrated, ...pendingUpdated].map(t => [t.id, t])
+      );
+      if (updateMap.size > 0) {
+        updatedTransactions = updatedTransactions.map(t =>
+          updateMap.has(t.id) ? { ...t, ...updateMap.get(t.id)! } : t
+        );
+      }
 
-      // Combine with existing transactions
-      const allTransactions = [...transactions, ...uniqueNewTransactions];
+      const allTransactions = [...updatedTransactions, ...brandNew];
 
-      // Import to store
       const importTransactions = useTransactionStore.getState().importTransactions;
       importTransactions(allTransactions);
 
-      // Auto-categorize with existing rules
       const applyRulesToAll = useTransactionStore.getState().applyRulesToAll;
       applyRulesToAll();
 
-      // Get categorization stats
       const currentState = useTransactionStore.getState();
-      const autoCategorized = uniqueNewTransactions.filter((tx) => {
+      const autoCategorized = brandNew.filter((tx) => {
         const updated = currentState.transactions.find((t) => t.id === tx.id);
         return updated && updated.categoryId;
       }).length;
 
-      // Save to persistence
       saveToBrowser();
 
-      // Show success message with detailed stats
-      const message = `✅ Importert ${newCount} nye transaksjoner • ${autoCategorized} auto-kategorisert • ${duplicatesCount} duplikater ignorert`;
+      const parts = [
+        brandNew.length > 0 ? `${brandNew.length} nye` : null,
+        migrated.length > 0 ? `${migrated.length} migrert til bank-ID` : null,
+        pendingUpdated.length > 0 ? `${pendingUpdated.length} oppdatert` : null,
+        autoCategorized > 0 ? `${autoCategorized} auto-kategorisert` : null,
+        duplicates.length > 0 ? `${duplicates.length} duplikater ignorert` : null,
+        locksMigrated > 0 ? `${locksMigrated} låser migrert` : null,
+      ].filter(Boolean);
+
+      const message = `✅ ${parts.join(' • ')}`;
       setImportStatus(message);
 
       console.log('\n✅ Import fullført:');
-      console.log(`   CSV rows: ${parseResult.originalCount}`);
-      console.log(`   Nye transaksjoner: ${newCount} (hver med unik UUID)`);
-      console.log(`   Auto-kategorisert: ${autoCategorized}`);
-      console.log(`   Duplikater ignorert: ${duplicatesCount}`);
       console.log(`   Total i system: ${currentState.transactions.length}`);
     } catch (error) {
       console.error('Import feilet:', error);
       setImportStatus(`❌ Feil ved import: ${error instanceof Error ? error.message : 'Ukjent feil'}`);
     } finally {
       setIsImporting(false);
-      // Reset file input
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -875,7 +919,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
               </p>
             </div>
 
-            {/* Import CSV + Export for phone */}
+            {/* Import Excel + Export for phone */}
             <div className="flex flex-col items-end gap-2">
               <div className="flex gap-2">
                 <Button
@@ -890,7 +934,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                   disabled={isImporting}
                   className="bg-green-600 hover:bg-green-700"
                 >
-                  {isImporting ? '⏳ Importerer...' : '📄 Importer CSV'}
+                  {isImporting ? '⏳ Importerer...' : '📄 Importer Excel'}
                 </Button>
               </div>
               
@@ -898,8 +942,8 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".csv"
-                onChange={handleCSVImport}
+                accept=".xlsx,.xls"
+                onChange={handleExcelImport}
                 className="hidden"
               />
 
