@@ -30,6 +30,10 @@ export interface CategoryRowData {
   children?: CategoryRowData[];
 }
 
+export interface OverviewMonthColumn extends MonthlyData {
+  sourceIndex: number;
+}
+
 const MONTH_NAMES = [
   'jan', 'feb', 'mar', 'apr', 'mai', 'jun',
   'jul', 'aug', 'sep', 'okt', 'nov', 'des'
@@ -209,6 +213,12 @@ export function calculateStats(
   return { sum, avg, variance, cv };
 }
 
+export function buildOverviewMonthColumns(monthlyData: MonthlyData[]): OverviewMonthColumn[] {
+  return monthlyData
+    .map((month, sourceIndex) => ({ ...month, sourceIndex }))
+    .reverse();
+}
+
 /**
  * Build category row data with hierarchy
  * Summary columns (sum, avg, var) are calculated from full months only (excludes current month)
@@ -225,7 +235,7 @@ export function buildCategoryRows(
   const currentMonthIndex = monthlyData.findIndex((m) => m.month === currentMonth);
   const excludeIndices = currentMonthIndex >= 0 ? [currentMonthIndex] : [];
   
-  // 1. Balanse (top row)
+  // Balanse
   const balanceValues = monthlyData.map((m) => m.balance);
   const balanceStats = calculateStats(balanceValues, excludeIndices);
   rows.push({
@@ -237,7 +247,7 @@ export function buildCategoryRows(
     ...balanceStats,
   });
   
-  // 2. Inntekter (non-collapsible)
+  // Inntekter (non-collapsible)
   const incomeHk = hovedkategorier.find((hk) => hk.id === 'cat_inntekter_default' || hk.name === 'Inntekter');
   if (incomeHk) {
     const incomeValues = monthlyData.map((m) => m.income);
@@ -271,7 +281,7 @@ export function buildCategoryRows(
     });
   }
   
-  // 3. Utgifter (collapsible groups)
+  // Utgifter (collapsible groups)
   // Find all expense hovedkategorier (not inntekter, sparing, overfort)
   const expenseHks = hovedkategorier.filter(
     (hk) => hk.id !== 'cat_inntekter_default' && hk.id !== 'sparing' && hk.id !== 'overfort'
@@ -351,7 +361,7 @@ export function buildCategoryRows(
     children: expenseChildren,
   });
   
-  // 4. Sparing (non-collapsible)
+  // Sparing (non-collapsible)
   const savingsHk = hovedkategorier.find((hk) => hk.id === 'sparing');
   if (savingsHk) {
     const savingsValues = monthlyData.map((m) => m.savings);
@@ -385,6 +395,17 @@ export function buildCategoryRows(
     });
   }
   
-  return rows;
+  const preferredOrder = new Map<string, number>([
+    ['__expenses', 0],
+    ['sparing', 1],
+    ['cat_inntekter_default', 2],
+    ['__balance', 3],
+  ]);
+
+  return rows.sort(
+    (a, b) =>
+      (preferredOrder.get(a.categoryId) ?? 99) -
+      (preferredOrder.get(b.categoryId) ?? 99)
+  );
 }
 

@@ -77,7 +77,31 @@ const getDaysInMonth = (monthString: string): number => {
   return new Date(year, month, 0).getDate();
 };
 
-const getMonthFromDate = (date: string): string => date.slice(0, 7);
+const getMonthFromDate = (date: string): string => {
+  const trimmed = date.trim();
+  if (!trimmed) return '';
+
+  // ISO-like format: YYYY-MM-DD
+  if (trimmed.includes('-')) {
+    const [year, month] = trimmed.split('-');
+    if (year && month) {
+      return `${year.padStart(4, '0')}-${month.padStart(2, '0')}`;
+    }
+  }
+
+  // Norwegian format: DD.MM.YYYY / DD.MM.YY
+  if (trimmed.includes('.')) {
+    const parts = trimmed.split('.');
+    if (parts.length === 3) {
+      const [, month, yearRaw] = parts;
+      const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw.padStart(4, '0');
+      return `${year}-${month.padStart(2, '0')}`;
+    }
+  }
+
+  // Best effort fallback for unknown formats
+  return trimmed.slice(0, 7);
+};
 
 const normalizeDateKey = (date: string): string | null => {
   if (!date) return null;

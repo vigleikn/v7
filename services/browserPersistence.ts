@@ -1,6 +1,9 @@
 /**
  * Browser Persistence Service
- * localStorage-based persistence for React apps
+ *
+ * IMPORTANT:
+ * - `transaction-store` (Zustand persist) is the single source of truth.
+ * - `transaction-app-data` is legacy and only read for one-time migration.
  */
 
 import { useTransactionStore } from '../src/store';
@@ -12,14 +15,67 @@ import {
 import {
   CategoryRule,
   TransactionLock,
+  migrateRulesMapFromPersist,
 } from '../categoryEngine';
 
-// ============================================================================
-// Configuration
-// ============================================================================
+const LEGACY_STORAGE_KEY = 'transaction-app-data';
+const LEGACY_MIGRATION_MARKER = 'transaction-app-data-migrated-v2';
+const ZUSTAND_STORAGE_KEY = 'transaction-store';
 
-const STORAGE_KEY = 'transaction-app-data';
-const STORAGE_VERSION = '1.0.0';
+const normalizeDateToIso = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.includes('-')) {
+    const [year, month, day] = trimmed.split('-');
+    if (!year || !month) return '';
+    return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${(day || '01').padStart(2, '0')}`;
+  }
+
+  if (trimmed.includes('.')) {
+    const parts = trimmed.split('.');
+    if (parts.length === 3) {
+      const [day, month, yearRaw] = parts;
+      if (!day || !month || !yearRaw) return '';
+      const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw.padStart(4, '0');
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+  }
+
+  return '';
+};
+
+const extractYearMonth = (dateValue: unknown): string | null => {
+  if (typeof dateValue !== 'string') return null;
+  const trimmed = dateValue.trim();
+  if (!trimmed) return null;
+
+  if (trimmed.includes('-')) {
+    const [year, month] = trimmed.split('-');
+    if (!year || !month) return null;
+    return `${year.padStart(4, '0')}-${month.padStart(2, '0')}`;
+  }
+
+  if (trimmed.includes('.')) {
+    const parts = trimmed.split('.');
+    if (parts.length !== 3) return null;
+    const [, month, yearRaw] = parts;
+    if (!month || !yearRaw) return null;
+    const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw.padStart(4, '0');
+    return `${year}-${month.padStart(2, '0')}`;
+  }
+
+  return null;
+};
+
+const getEarliestMonth = (transactions: Array<{ dato?: string }>): string | null => {
+  const months = transactions
+    .map((tx) => extractYearMonth(tx.dato))
+    .filter((m): m is string => Boolean(m));
+  if (months.length === 0) return null;
+  return months.reduce((min, current) => (current < min ? current : min));
+};
 
 // ============================================================================
 // Types
@@ -80,46 +136,16 @@ function deserializeDates(obj: any): any {
 // ============================================================================
 
 /**
- * Saves current store state to localStorage
+ * Legacy no-op.
+ * State is persisted by Zustand (`transaction-store`) automatically.
  */
 export function saveToBrowser(): void {
-  if (typeof window === 'undefined' || !window.localStorage) {
-    console.warn('localStorage not available');
-    return;
-  }
-
-  const state = useTransactionStore.getState();
-
-  const data: PersistedData = {
-    version: STORAGE_VERSION,
-    lastSaved: new Date().toISOString(),
-    transactions: state.transactions,
-    hovedkategorier: Array.from(state.hovedkategorier.entries()),
-    underkategorier: Array.from(state.underkategorier.entries()),
-    rules: Array.from(state.rules.entries()).map(([key, rule]) => [
-      key,
-      serializeDates(rule),
-    ]),
-    locks: Array.from(state.locks.entries()).map(([key, lock]) => [
-      key,
-      serializeDates(lock),
-    ]),
-    budgets: state.budgets ? Array.from(state.budgets.entries()) : [],
-    startBalance: state.startBalance
-      ? { amount: Math.round(Number(state.startBalance.amount)), date: state.startBalance.date }
-      : null,
-  };
-
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    console.log('✓ Saved to browser storage');
-  } catch (error) {
-    console.error('Failed to save to browser:', error);
-  }
+  return;
 }
 
 /**
- * Loads data from localStorage into the store
+ * Loads legacy data from `transaction-app-data` into store (one-time migration).
+ * Returns true if migration loaded any data into state.
  */
 export function loadFromBrowser(): boolean {
   if (typeof window === 'undefined' || !window.localStorage) {
@@ -128,18 +154,67 @@ export function loadFromBrowser(): boolean {
   }
 
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) {
-      console.log('No saved data found in browser');
+    const hasLegacyBeenMigrated = localStorage.getItem(LEGACY_MIGRATION_MARKER);
+    const zustandRaw = localStorage.getItem(ZUSTAND_STORAGE_KEY);
+    const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY);
+
+    if (hasLegacyBeenMigrated) {
       return false;
     }
 
-    const data: PersistedData = deserializeDates(JSON.parse(stored));
+    if (!legacyRaw) {
+      // Nothing legacy to migrate.
+      return false;
+    }
 
-    // Validate version
-    if (data.version !== STORAGE_VERSION) {
-      console.warn(`Version mismatch: ${data.version} vs ${STORAGE_VERSION}`);
-      // Could add migration logic here
+    // If canonical key exists, only prefer legacy when it clearly contains
+    // richer history (safety against partial/corrupt canonical state).
+    if (zustandRaw) {
+      try {
+        const parsedZustand = JSON.parse(zustandRaw);
+        const canonicalTxs = Array.isArray(parsedZustand?.state?.transactions)
+          ? parsedZustand.state.transactions
+          : [];
+        const legacyPreview = JSON.parse(legacyRaw);
+        const legacyTxs = Array.isArray(legacyPreview?.transactions)
+          ? legacyPreview.transactions
+          : [];
+
+        const canonicalCount = canonicalTxs.length;
+        const legacyCount = legacyTxs.length;
+        const canonicalEarliest = getEarliestMonth(canonicalTxs);
+        const legacyEarliest = getEarliestMonth(legacyTxs);
+
+        const canonicalLooksEmpty = canonicalCount === 0 && legacyCount > 0;
+        const legacyLooksRicher =
+          legacyCount > canonicalCount &&
+          Boolean(canonicalEarliest && legacyEarliest && legacyEarliest < canonicalEarliest);
+
+        if (!canonicalLooksEmpty && !legacyLooksRicher) {
+          console.warn(
+            '[Persistence] Found both transaction-store and legacy transaction-app-data. ' +
+              'Using transaction-store and skipping legacy import.'
+          );
+          localStorage.setItem(LEGACY_MIGRATION_MARKER, new Date().toISOString());
+          return false;
+        }
+
+        console.warn(
+          '[Persistence] Legacy storage appears richer than canonical state. ' +
+            'Using legacy data once to recover history.'
+        );
+      } catch {
+        localStorage.setItem(LEGACY_MIGRATION_MARKER, new Date().toISOString());
+        return false;
+      }
+    }
+
+    const data: PersistedData = deserializeDates(JSON.parse(legacyRaw));
+
+    const loadedTxCount = Array.isArray(data.transactions) ? data.transactions.length : 0;
+    if (loadedTxCount === 0) {
+      localStorage.setItem(LEGACY_MIGRATION_MARKER, new Date().toISOString());
+      return false;
     }
 
     const state = useTransactionStore.getState();
@@ -171,7 +246,7 @@ export function loadFromBrowser(): boolean {
     // Load rules
     if (data.rules && data.rules.length > 0) {
       useTransactionStore.setState((state) => {
-        const newRules = new Map(data.rules);
+        const newRules = migrateRulesMapFromPersist(new Map(data.rules));
         return { ...state, rules: newRules };
       });
       console.log(`✓ Loaded ${data.rules.length} rules`);
@@ -198,7 +273,7 @@ export function loadFromBrowser(): boolean {
       startBalance: data.startBalance
         ? {
             amount: Math.round(Number(data.startBalance.amount)),
-            date: data.startBalance.date,
+            date: normalizeDateToIso(data.startBalance.date),
           }
         : null,
     }));
@@ -206,7 +281,13 @@ export function loadFromBrowser(): boolean {
     // Re-apply rules for consistency
     state.applyRulesToAll();
 
-    console.log(`✓ Loaded from browser storage (saved: ${new Date(data.lastSaved).toLocaleString()})`);
+    // Mark migration as complete and remove legacy key to eliminate ambiguity.
+    localStorage.setItem(LEGACY_MIGRATION_MARKER, new Date().toISOString());
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+
+    console.log(
+      `✓ Migrated legacy browser storage (saved: ${new Date(data.lastSaved).toLocaleString()})`
+    );
     return true;
   } catch (error) {
     console.error('Failed to load from browser:', error);
@@ -219,63 +300,34 @@ export function loadFromBrowser(): boolean {
  */
 export function clearBrowserStorage(): void {
   if (typeof window !== 'undefined' && window.localStorage) {
-    localStorage.removeItem(STORAGE_KEY);
-    console.log('✓ Browser storage cleared');
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    localStorage.removeItem(LEGACY_MIGRATION_MARKER);
+    console.log('✓ Legacy browser storage cleared');
   }
 }
 
 /**
- * Sets up auto-save for browser (saves on every change)
+ * Legacy no-op.
+ * Zustand persist already handles auto-save.
  */
 export function setupBrowserAutoSave(): () => void {
-  if (typeof window === 'undefined') {
-    console.warn('Not in browser environment');
-    return () => {};
-  }
-
-  console.log('🔄 Setting up browser auto-save...');
-
-  let saveTimeout: NodeJS.Timeout | null = null;
-
-  const unsubscribe = useTransactionStore.subscribe((state, prevState) => {
-    // Check if relevant state changed
-    const hasChanges =
-      state.transactions !== prevState.transactions ||
-      state.hovedkategorier !== prevState.hovedkategorier ||
-      state.underkategorier !== prevState.underkategorier ||
-      state.rules !== prevState.rules ||
-      state.locks !== prevState.locks ||
-      state.budgets !== prevState.budgets ||
-      state.startBalance !== prevState.startBalance;
-
-    if (hasChanges) {
-      // Debounce saves
-      if (saveTimeout) clearTimeout(saveTimeout);
-      saveTimeout = setTimeout(() => {
-        saveToBrowser();
-      }, 500);
-    }
-  });
-
-  console.log('✓ Browser auto-save enabled');
-  return unsubscribe;
+  return () => {};
 }
 
 /**
- * Complete browser setup: Load and enable auto-save
+ * Complete browser setup:
+ * - migrate legacy key once (if canonical key is missing)
+ * - no extra autosave layer
  */
 export function setupBrowserPersistence(): () => void {
-  console.log('📦 Setting up browser persistence...');
+  console.log('📦 Setting up browser persistence (single-source mode)...');
   
-  // Load existing data
+  // One-time legacy migration if needed.
   loadFromBrowser();
-
-  // Setup auto-save
-  const unsubscribe = setupBrowserAutoSave();
 
   console.log('✅ Browser persistence ready');
   
-  return unsubscribe;
+  return () => {};
 }
 
 /**
@@ -290,7 +342,7 @@ export function getBrowserStorageInfo(): {
     return null;
   }
 
-  const stored = localStorage.getItem(STORAGE_KEY);
+  const stored = localStorage.getItem(LEGACY_STORAGE_KEY);
   if (!stored) {
     return { size: 0, sizeKB: 0 };
   }

@@ -14,6 +14,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Select } from './ui/select';
 import { Checkbox } from './ui/checkbox';
+import { CategoryCombobox } from './CategoryCombobox';
 import {
   Table,
   TableHeader,
@@ -23,22 +24,16 @@ import {
   TableCell,
 } from './ui/table';
 import { parseExcel } from '../excelParser';
-import { generateTransactionId, generateContentHash } from '../categoryEngine';
+import {
+  generateTransactionId,
+  generateContentHash,
+  generateComparableContentHashes,
+  generateSoftMatchKey,
+  normalizeDateForComparison,
+} from '../categoryEngine';
 import { saveToBrowser } from '../services/browserPersistence';
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Removes emoji and non-letter characters from the start of a category name
- * for sorting and searching purposes. Preserves the original name in data.
- * 
- * Example: '🍕 Mat ute' → 'Mat ute'
- */
-const cleanCategoryNameForSort = (name: string): string => {
-  return name.replace(/^[^\p{L}]*/u, '');
-};
+import { buildAssignableCategoryOptions } from '../services/categoryOptions';
+import { getQuickDateRange, QuickDatePeriod, QUICK_DATE_PERIODS } from '../services/datePeriods';
 
 // ============================================================================
 // Transaction Filter Bar Component
@@ -76,36 +71,17 @@ const TransactionFilterBar: React.FC<TransactionFilterBarProps> = ({
     (state) => state.getHovedkategoriWithUnderkategorier
   );
 
-  // Get all categories flat for dropdown
-  // Rules: Only show subcategories OR hovedkategorier without subcategories (like Overført)
   const allCategories = useMemo(() => {
-    const cats: Array<{ id: string; name: string; isSubcategory: boolean }> = [];
-    
-    hovedkategorier.forEach((hk) => {
-      const details = getHovedkategoriWithUnderkategorier(hk.id);
-      const hasSubcategories = details?.underkategorier && details.underkategorier.length > 0;
-      
-      // Only add hovedkategori if it has NO subcategories (e.g., Overført)
-      if (!hasSubcategories) {
-        cats.push({ id: hk.id, name: hk.name, isSubcategory: false });
-      }
-      
-      // Always add all underkategorier (without bullet)
-      details?.underkategorier.forEach((uk) => {
-        cats.push({ id: uk.id, name: uk.name, isSubcategory: true });
-      });
-    });
-    
-    // Sort alphabetically by name (ignoring emoji at start)
-    return cats.sort((a, b) => 
-      cleanCategoryNameForSort(a.name).localeCompare(
-        cleanCategoryNameForSort(b.name), 
-        'nb'
-      )
-    );
+    return buildAssignableCategoryOptions(hovedkategorier, getHovedkategoriWithUnderkategorier);
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   const hasActiveFilters = searchValue || dateFromValue || dateToValue || typeValue || categoryValue;
+
+  const handleQuickPeriod = (period: QuickDatePeriod) => {
+    const range = getQuickDateRange(period);
+    onDateFromChange(range.dateFrom);
+    onDateToChange(range.dateTo);
+  };
 
   return (
     <Card className="mb-6">
@@ -120,6 +96,20 @@ const TransactionFilterBar: React.FC<TransactionFilterBarProps> = ({
         </div>
       </CardHeader>
       <CardContent>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {QUICK_DATE_PERIODS.map((period) => (
+            <Button
+              key={period.id}
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleQuickPeriod(period.id)}
+            >
+              {period.label}
+            </Button>
+          ))}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
           {/* Search */}
           <div className="lg:col-span-2">
@@ -168,18 +158,14 @@ const TransactionFilterBar: React.FC<TransactionFilterBarProps> = ({
           {/* Category Filter */}
           <div className="lg:col-span-2">
             <label className="text-sm font-medium mb-1 block">Kategori</label>
-            <Select
+            <CategoryCombobox
               value={categoryValue}
-              onChange={(e) => onCategoryChange(e.target.value)}
-            >
-              <option value="">Alle kategorier</option>
-              <option value="__uncategorized">Ukategorisert</option>
-              {allCategories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </option>
-              ))}
-            </Select>
+              onChange={onCategoryChange}
+              options={allCategories}
+              includeAllOption
+              includeUncategorized
+              placeholder="Alle kategorier"
+            />
           </div>
         </div>
       </CardContent>
@@ -210,33 +196,8 @@ const BulkActionBar: React.FC<BulkActionBarProps> = ({
     (state) => state.getHovedkategoriWithUnderkategorier
   );
 
-  // Get all categories flat for dropdown
-  // Rules: Only show subcategories OR hovedkategorier without subcategories (like Overført)
   const allCategories = useMemo(() => {
-    const cats: Array<{ id: string; name: string; isSubcategory: boolean }> = [];
-    
-    hovedkategorier.forEach((hk) => {
-      const details = getHovedkategoriWithUnderkategorier(hk.id);
-      const hasSubcategories = details?.underkategorier && details.underkategorier.length > 0;
-      
-      // Only add hovedkategori if it has NO subcategories (e.g., Overført)
-      if (!hasSubcategories) {
-        cats.push({ id: hk.id, name: hk.name, isSubcategory: false });
-      }
-      
-      // Always add all underkategorier (without bullet)
-      details?.underkategorier.forEach((uk) => {
-        cats.push({ id: uk.id, name: uk.name, isSubcategory: true });
-      });
-    });
-    
-    // Sort alphabetically by name (ignoring emoji at start)
-    return cats.sort((a, b) => 
-      cleanCategoryNameForSort(a.name).localeCompare(
-        cleanCategoryNameForSort(b.name), 
-        'nb'
-      )
-    );
+    return buildAssignableCategoryOptions(hovedkategorier, getHovedkategoriWithUnderkategorier);
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   const handleCategorize = () => {
@@ -257,18 +218,13 @@ const BulkActionBar: React.FC<BulkActionBarProps> = ({
 
           <div className="flex-1 flex items-center gap-4">
             <div className="flex-1 max-w-sm">
-              <Select
+              <CategoryCombobox
                 value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-              >
-                <option value="">Velg kategori...</option>
-                <option value="__uncategorized">Ukategorisert</option>
-                {allCategories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={setSelectedCategory}
+                options={allCategories}
+                includeUncategorized
+                placeholder="Velg kategori..."
+              />
             </div>
 
             <label className="flex items-center gap-2 text-sm">
@@ -312,6 +268,7 @@ interface TransactionRowProps {
   isSelected: boolean;
   onToggleSelect: () => void;
   onCategorize: (categoryId: string) => void;
+  onCategorizeException: (categoryId: string) => void;
 }
 
 const TransactionRow: React.FC<TransactionRowProps> = ({
@@ -319,6 +276,7 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
   isSelected,
   onToggleSelect,
   onCategorize,
+  onCategorizeException,
 }) => {
   const hovedkategorier = useTransactionStore(selectHovedkategorier);
   const redactSensitive = useTransactionStore((state) => state.redactSensitive);
@@ -340,33 +298,8 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
 
   const isIncomeTx = !!transaction.categoryId && incomeCategoryIds.has(transaction.categoryId);
 
-  // Get all categories flat for dropdown
-  // Rules: Only show subcategories OR hovedkategorier without subcategories (like Overført)
   const allCategories = useMemo(() => {
-    const cats: Array<{ id: string; name: string; isSubcategory: boolean }> = [];
-    
-    hovedkategorier.forEach((hk) => {
-      const details = getHovedkategoriWithUnderkategorier(hk.id);
-      const hasSubcategories = details?.underkategorier && details.underkategorier.length > 0;
-      
-      // Only add hovedkategori if it has NO subcategories (e.g., Overført)
-      if (!hasSubcategories) {
-        cats.push({ id: hk.id, name: hk.name, isSubcategory: false });
-      }
-      
-      // Always add all underkategorier (without bullet)
-      details?.underkategorier.forEach((uk) => {
-        cats.push({ id: uk.id, name: uk.name, isSubcategory: true });
-      });
-    });
-    
-    // Sort alphabetically by name (ignoring emoji at start)
-    return cats.sort((a, b) => 
-      cleanCategoryNameForSort(a.name).localeCompare(
-        cleanCategoryNameForSort(b.name), 
-        'nb'
-      )
-    );
+    return buildAssignableCategoryOptions(hovedkategorier, getHovedkategoriWithUnderkategorier);
   }, [hovedkategorier, getHovedkategoriWithUnderkategorier]);
 
   // Format amount without decimals
@@ -469,20 +402,16 @@ const TransactionRow: React.FC<TransactionRowProps> = ({
               🔒
             </span>
           )}
-          <Select
+          <CategoryCombobox
             value={transaction.categoryId || ''}
-            onChange={(e) => onCategorize(e.target.value)}
+            onChange={onCategorize}
+            options={allCategories}
+            includeUncategorized
+            placeholder="Velg kategori..."
             disabled={transaction.isLocked}
             className="text-sm"
-          >
-            <option value="">Velg kategori...</option>
-            <option value="__uncategorized">Ukategorisert</option>
-            {allCategories.map((cat) => (
-              <option key={cat.id} value={cat.id}>
-                {cat.name}
-              </option>
-            ))}
-          </Select>
+            onCategoryContextMenu={onCategorizeException}
+          />
         </div>
       </TableCell>
 
@@ -510,6 +439,20 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isImporting, setIsImporting] = useState(false);
   const [importStatus, setImportStatus] = useState<string | null>(null);
+  const [importAnalysis, setImportAnalysis] = useState<{
+    excelRows: number;
+    existing: number;
+    brandNew: number;
+    migrated: number;
+    softMigrated: number;
+    pendingUpdated: number;
+    duplicates: number;
+    locksMigrated: number;
+    autoCategorized: number;
+    legacyPruned: number;
+    rulesMigrated: number;
+    total: number;
+  } | null>(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -545,6 +488,7 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
     (state) => state.categorizeTransactionAction
   );
   const bulkCategorize = useTransactionStore((state) => state.bulkCategorize);
+  const lockTransactionAction = useTransactionStore((state) => state.lockTransactionAction);
   const setFilters = useTransactionStore((state) => state.setFilters);
 
   const [exportStatus, setExportStatus] = useState<string | null>(null);
@@ -727,12 +671,17 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
     });
   };
 
+  const handleQuickException = (transactionId: string, categoryId: string) => {
+    lockTransactionAction(transactionId, categoryId, 'Hurtig-unntak: bare denne transaksjonen');
+  };
+
   const handleExcelImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
     setImportStatus(null);
+    setImportAnalysis(null);
 
     try {
       const buffer = await file.arrayBuffer();
@@ -748,25 +697,56 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
         isLocked: false,
       }));
 
-      // Dual lookup: by transactionId (for Excel reimport) and by content hash (for CSV->Excel migration)
+      const toTimestamp = (dateStr: string): number => {
+        if (!dateStr) return 0;
+        if (dateStr.includes('.')) {
+          const parts = dateStr.split('.');
+          if (parts.length === 3) {
+            const [day, month, yearRaw] = parts;
+            const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
+            return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+          }
+        }
+        if (dateStr.includes('-')) return new Date(dateStr).getTime();
+        return new Date(dateStr).getTime();
+      };
+      const CUTOFF_2026 = new Date(2026, 0, 1).getTime();
+      // #region agent log
+      fetch('http://127.0.0.1:7355/ingest/0b822f5f-6625-4781-b5b1-9a474aa5cf9f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c8c857'},body:JSON.stringify({sessionId:'c8c857',runId:'pre-fix-3',hypothesisId:'H10',location:'components/TransactionPage.tsx:handleExcelImport:start',message:'Import flow start snapshot',data:{existingTransactions:transactions.length,incomingRows:parseResult.originalCount},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+
+      // --- Lookup indexes ---
       const existingByTransactionId = new Map(
         transactions.map((t) => [t.transactionId, t])
       );
       const existingByContentHash = new Map<string, typeof transactions[number]>();
       for (const t of transactions) {
-        const hash = generateContentHash(t);
-        if (!existingByContentHash.has(hash)) {
-          existingByContentHash.set(hash, t);
+        for (const hash of generateComparableContentHashes(t)) {
+          if (!existingByContentHash.has(hash)) {
+            existingByContentHash.set(hash, t);
+          }
         }
       }
+      // Soft-match index: only legacy (no bankId) 2026+ transactions
+      const existingBySoftKey = new Map<string, typeof transactions[number][]>();
+      for (const t of transactions) {
+        if (t.bankId) continue;
+        if (toTimestamp(t.dato) < CUTOFF_2026) continue;
+        const key = generateSoftMatchKey(t);
+        if (!existingBySoftKey.has(key)) existingBySoftKey.set(key, []);
+        existingBySoftKey.get(key)!.push(t);
+      }
 
+      // --- Classify each Excel row ---
       const duplicates: typeof newTransactions = [];
       const brandNew: typeof newTransactions = [];
       const pendingUpdated: typeof newTransactions = [];
       const migrated: typeof newTransactions = [];
+      const softMigrated: typeof newTransactions = [];
+      const softMatchedLegacyIds = new Set<string>();
 
       for (const tx of newTransactions) {
-        // 1) Direct match on transactionId (handles Excel-to-Excel reimport)
+        // 1) Direct match on transactionId (Excel-to-Excel reimport)
         const byId = existingByTransactionId.get(tx.transactionId);
         if (byId) {
           if (byId.beløp !== tx.beløp || byId.tekst !== tx.tekst || byId.dato !== tx.dato) {
@@ -777,9 +757,11 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
           continue;
         }
 
-        // 2) Content-hash match (handles CSV->Excel migration)
-        const contentHash = generateContentHash(tx);
-        const byHash = existingByContentHash.get(contentHash);
+        // 2) Strict content-hash match (CSV->Excel migration)
+        const contentHashes = generateComparableContentHashes(tx);
+        const byHash = contentHashes
+          .map((hash) => existingByContentHash.get(hash))
+          .find(Boolean);
         if (byHash) {
           migrated.push({
             ...tx,
@@ -787,56 +769,104 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
             categoryId: byHash.categoryId,
             isLocked: byHash.isLocked,
           });
-          existingByContentHash.delete(contentHash);
+          contentHashes.forEach((hash) => existingByContentHash.delete(hash));
+          softMatchedLegacyIds.add(byHash.id);
           continue;
         }
 
-        // 3) No match at all
+        // 3) Soft-match fallback: date+amount+sorted accounts
+        const softKey = generateSoftMatchKey(tx);
+        const softCandidates = existingBySoftKey.get(softKey);
+        if (softCandidates && softCandidates.length > 0) {
+          // Pick best: prefer tekst match, then first available
+          const best = softCandidates.reduce((a, b) => {
+            const scoreA = (a.tekst === tx.tekst ? 2 : 0) + (a.type?.toLowerCase() === tx.type?.toLowerCase() ? 1 : 0);
+            const scoreB = (b.tekst === tx.tekst ? 2 : 0) + (b.type?.toLowerCase() === tx.type?.toLowerCase() ? 1 : 0);
+            return scoreB > scoreA ? b : a;
+          });
+          softMigrated.push({
+            ...tx,
+            id: best.id,
+            categoryId: best.categoryId,
+            isLocked: best.isLocked,
+          });
+          softMatchedLegacyIds.add(best.id);
+          // Remove used candidate so it can't match again
+          const remaining = softCandidates.filter(c => c.id !== best.id);
+          if (remaining.length > 0) {
+            existingBySoftKey.set(softKey, remaining);
+          } else {
+            existingBySoftKey.delete(softKey);
+          }
+          continue;
+        }
+
+        // 4) No match
         brandNew.push(tx);
       }
 
-      // Lock migration: move locks from old content-hash keys to new bank-ID keys
+      // --- Lock migration ---
       let locksMigrated = 0;
       const storeState = useTransactionStore.getState();
       const locks = storeState.locks;
       if (locks && locks.size > 0) {
-        const candidates = [...brandNew, ...pendingUpdated, ...migrated];
+        const candidates = [...brandNew, ...pendingUpdated, ...migrated, ...softMigrated];
         for (const tx of candidates) {
           if (!tx.bankId) continue;
-          const contentHash = generateContentHash(tx);
-          const existingLock = locks.get(contentHash);
-          if (existingLock && !locks.has(tx.transactionId)) {
+          const legacyHash = generateComparableContentHashes(tx).find((hash) => locks.has(hash));
+          const existingLock = legacyHash ? locks.get(legacyHash) : undefined;
+          if (legacyHash && existingLock && !locks.has(tx.transactionId)) {
             storeState.lockTransactionAction(tx.transactionId, existingLock.categoryId);
-            storeState.unlockTransactionAction(contentHash);
+            storeState.unlockTransactionAction(legacyHash);
             locksMigrated++;
           }
         }
       }
 
-      console.log(`📊 Import analysis:`);
-      console.log(`   Excel rows: ${parseResult.originalCount}`);
-      console.log(`   Existing in store: ${transactions.length}`);
-      console.log(`   Brand new: ${brandNew.length}`);
-      console.log(`   Migrated (CSV→Excel): ${migrated.length}`);
-      console.log(`   Pending updated: ${pendingUpdated.length}`);
-      console.log(`   Duplicates skipped: ${duplicates.length}`);
-      console.log(`   Locks migrated: ${locksMigrated}`);
-
-      if (brandNew.length === 0 && pendingUpdated.length === 0 && migrated.length === 0) {
-        const message = `ℹ️ Ingen nye transaksjoner – alle ${duplicates.length} finnes allerede`;
-        setImportStatus(message);
-        return;
+      // --- Rule migration: when legacy tekst differs from Excel tekst ---
+      let rulesMigrated = 0;
+      const rules = storeState.rules;
+      const pendingNewRules: { tekst: string; categoryId: string }[] = [];
+      if (rules && rules.size > 0) {
+        for (const sm of softMigrated) {
+          if (!sm.categoryId) continue;
+          const legacyTx = transactions.find(t => t.id === sm.id);
+          if (!legacyTx || legacyTx.tekst === sm.tekst) continue;
+          const oldKey = legacyTx.tekst.trim().toLowerCase();
+          const newKey = sm.tekst.trim().toLowerCase();
+          if (oldKey && newKey && oldKey !== newKey && rules.has(oldKey) && !rules.has(newKey)) {
+            const oldRule = rules.get(oldKey)!;
+            pendingNewRules.push({ tekst: sm.tekst, categoryId: oldRule.categoryId });
+            rulesMigrated++;
+          }
+        }
       }
 
-      // Apply in-place updates (migrated + pending) to existing transactions
+      // --- Prune legacy 2026 CSV-only transactions ---
+      const allMigratedIds = new Set([
+        ...migrated.map(t => t.id),
+        ...softMigrated.map(t => t.id),
+      ]);
       let updatedTransactions = [...transactions];
       const updateMap = new Map(
-        [...migrated, ...pendingUpdated].map(t => [t.id, t])
+        [...migrated, ...softMigrated, ...pendingUpdated].map(t => [t.id, t])
       );
       if (updateMap.size > 0) {
         updatedTransactions = updatedTransactions.map(t =>
           updateMap.has(t.id) ? { ...t, ...updateMap.get(t.id)! } : t
         );
+      }
+      // Remove all 2026+ transactions without bankId (legacy CSV ghosts)
+      const pre2026Count = updatedTransactions.filter(t => toTimestamp(t.dato) < CUTOFF_2026).length;
+      const legacyPruned = updatedTransactions.filter(
+        t => !t.bankId && toTimestamp(t.dato) >= CUTOFF_2026 && !allMigratedIds.has(t.id)
+      ).length;
+      updatedTransactions = updatedTransactions.filter(
+        t => !!t.bankId || toTimestamp(t.dato) < CUTOFF_2026
+      );
+      const postPre2026Count = updatedTransactions.filter(t => toTimestamp(t.dato) < CUTOFF_2026).length;
+      if (pre2026Count !== postPre2026Count) {
+        console.error('SAFETY CHECK FAILED: pre-2026 transactions were modified!');
       }
 
       const allTransactions = [...updatedTransactions, ...brandNew];
@@ -844,10 +874,18 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
       const importTransactions = useTransactionStore.getState().importTransactions;
       importTransactions(allTransactions);
 
+      // Apply migrated rules before running applyRulesToAll so new tekst variants get auto-categorized
+      for (const r of pendingNewRules) {
+        useTransactionStore.getState().createRule(r.tekst, r.categoryId);
+      }
+
       const applyRulesToAll = useTransactionStore.getState().applyRulesToAll;
       applyRulesToAll();
 
       const currentState = useTransactionStore.getState();
+      // #region agent log
+      fetch('http://127.0.0.1:7355/ingest/0b822f5f-6625-4781-b5b1-9a474aa5cf9f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c8c857'},body:JSON.stringify({sessionId:'c8c857',runId:'pre-fix-3',hypothesisId:'H10',location:'components/TransactionPage.tsx:handleExcelImport:end',message:'Import flow result snapshot',data:{brandNew:brandNew.length,migrated:migrated.length,softMigrated:softMigrated.length,pendingUpdated:pendingUpdated.length,duplicates:duplicates.length,legacyPruned,totalAfterImport:currentState.transactions.length},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       const autoCategorized = brandNew.filter((tx) => {
         const updated = currentState.transactions.find((t) => t.id === tx.id);
         return updated && updated.categoryId;
@@ -855,13 +893,31 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
 
       saveToBrowser();
 
+      setImportAnalysis({
+        excelRows: parseResult.originalCount,
+        existing: transactions.length,
+        brandNew: brandNew.length,
+        migrated: migrated.length,
+        softMigrated: softMigrated.length,
+        pendingUpdated: pendingUpdated.length,
+        duplicates: duplicates.length,
+        locksMigrated,
+        autoCategorized,
+        legacyPruned,
+        rulesMigrated,
+        total: currentState.transactions.length,
+      });
+
       const parts = [
         brandNew.length > 0 ? `${brandNew.length} nye` : null,
-        migrated.length > 0 ? `${migrated.length} migrert til bank-ID` : null,
+        migrated.length > 0 ? `${migrated.length} migrert (eksakt)` : null,
+        softMigrated.length > 0 ? `${softMigrated.length} migrert (soft)` : null,
         pendingUpdated.length > 0 ? `${pendingUpdated.length} oppdatert` : null,
         autoCategorized > 0 ? `${autoCategorized} auto-kategorisert` : null,
         duplicates.length > 0 ? `${duplicates.length} duplikater ignorert` : null,
+        legacyPruned > 0 ? `${legacyPruned} CSV-rester fjernet` : null,
         locksMigrated > 0 ? `${locksMigrated} låser migrert` : null,
+        rulesMigrated > 0 ? `${rulesMigrated} regler migrert` : null,
       ].filter(Boolean);
 
       const message = `✅ ${parts.join(' • ')}`;
@@ -900,6 +956,13 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
     const rounded = Math.round(selectedTransactionsSum);
     return rounded.toLocaleString('no-NO');
   }, [selectedTransactionsSum, selectedCount]);
+
+  React.useEffect(() => {
+    if (!dateFromValue && !dateToValue && selectedCount === 0) return;
+    // #region agent log
+    fetch('http://127.0.0.1:7706/ingest/0b822f5f-6625-4781-b5b1-9a474aa5cf9f',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'20b3c2'},body:JSON.stringify({sessionId:'20b3c2',runId:'pre-fix',hypothesisId:'H2-H5',location:'components/TransactionPage.tsx:934',message:'UI counts after filter/selection',data:{dateFromValue:dateFromValue || null,dateToValue:dateToValue || null,filteredTransactionsCount:filteredTransactions.length,sortedTransactionsCount:sortedTransactions.length,paginatedTransactionsCount:paginatedTransactions.length,currentPage,totalPages,selectedCount},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [dateFromValue, dateToValue, filteredTransactions.length, sortedTransactions.length, paginatedTransactions.length, currentPage, totalPages, selectedCount]);
 
   return (
     <div className="flex h-screen bg-gray-50">
@@ -947,16 +1010,32 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                 className="hidden"
               />
 
-              {/* Import status message */}
+              {/* Import status + analysis */}
               {importStatus && (
-                <div className={`text-sm px-3 py-1 rounded ${
+                <div className={`text-sm px-3 py-2 rounded ${
                   importStatus.startsWith('✅') 
                     ? 'bg-green-100 text-green-800' 
                     : importStatus.startsWith('❌')
                     ? 'bg-red-100 text-red-800'
                     : 'bg-blue-100 text-blue-800'
                 }`}>
-                  {importStatus}
+                  <div>{importStatus}</div>
+                  {importAnalysis && (
+                    <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-0.5 text-xs opacity-80">
+                      <span>Rader i Excel-fil:</span><span className="text-right font-mono">{importAnalysis.excelRows}</span>
+                      <span>Fantes fra foer:</span><span className="text-right font-mono">{importAnalysis.existing}</span>
+                      <span>Nye transaksjoner:</span><span className="text-right font-mono">{importAnalysis.brandNew}</span>
+                      {importAnalysis.migrated > 0 && (<><span>Migrert (eksakt):</span><span className="text-right font-mono">{importAnalysis.migrated}</span></>)}
+                      {importAnalysis.softMigrated > 0 && (<><span>Migrert (soft-match):</span><span className="text-right font-mono">{importAnalysis.softMigrated}</span></>)}
+                      {importAnalysis.pendingUpdated > 0 && (<><span>Oppdatert (pending):</span><span className="text-right font-mono">{importAnalysis.pendingUpdated}</span></>)}
+                      <span>Duplikater ignorert:</span><span className="text-right font-mono">{importAnalysis.duplicates}</span>
+                      {importAnalysis.autoCategorized > 0 && (<><span>Auto-kategorisert:</span><span className="text-right font-mono">{importAnalysis.autoCategorized}</span></>)}
+                      {importAnalysis.legacyPruned > 0 && (<><span>CSV-rester fjernet:</span><span className="text-right font-mono">{importAnalysis.legacyPruned}</span></>)}
+                      {importAnalysis.locksMigrated > 0 && (<><span>Laaser migrert:</span><span className="text-right font-mono">{importAnalysis.locksMigrated}</span></>)}
+                      {importAnalysis.rulesMigrated > 0 && (<><span>Regler migrert:</span><span className="text-right font-mono">{importAnalysis.rulesMigrated}</span></>)}
+                      <span className="font-medium pt-1 border-t border-current/20">Totalt i system:</span><span className="text-right font-mono font-medium pt-1 border-t border-current/20">{importAnalysis.total}</span>
+                    </div>
+                  )}
                 </div>
               )}
               {/* Export status */}
@@ -1079,6 +1158,9 @@ export const TransactionPage: React.FC<TransactionPageProps> = ({ onNavigate }) 
                     }
                     onCategorize={(categoryId) =>
                       handleCategorize(transaction.transactionId, categoryId)
+                    }
+                    onCategorizeException={(categoryId) =>
+                      handleQuickException(transaction.transactionId, categoryId)
                     }
                   />
                 ))

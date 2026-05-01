@@ -42,6 +42,21 @@ export function applyFiltersToTransactions(
   transactions: CategorizedTransaction[],
   filters: TransactionFilters
 ): CategorizedTransaction[] {
+  const toTimestamp = (dateStr?: string): number => {
+    if (!dateStr) return 0;
+    if (dateStr.includes('.')) {
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        const [day, month, yearRaw] = parts;
+        const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
+        return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+      }
+    }
+    if (dateStr.includes('-')) {
+      return new Date(dateStr).getTime();
+    }
+    return new Date(dateStr).getTime();
+  };
   return transactions.filter(tx => {
     // Search filter
     if (filters.search) {
@@ -54,8 +69,11 @@ export function applyFiltersToTransactions(
     }
     
     // Date filters
-    if (filters.dateFrom && tx.dato < filters.dateFrom) return false;
-    if (filters.dateTo && tx.dato > filters.dateTo) return false;
+    const txTimestamp = toTimestamp(tx.dato);
+    const dateFromTimestamp = filters.dateFrom ? toTimestamp(filters.dateFrom) : null;
+    const dateToTimestamp = filters.dateTo ? toTimestamp(filters.dateTo) : null;
+    if (dateFromTimestamp !== null && txTimestamp < dateFromTimestamp) return false;
+    if (dateToTimestamp !== null && txTimestamp > dateToTimestamp) return false;
     
     // Category filter
     if (filters.categoryIds.length > 0) {
@@ -463,7 +481,10 @@ export function createActions(
           if (lockTransactions) {
             state.locks = lockTransaction(state.locks, tx.transactionId, categoryId, lockReason);
           } else if (createRule) {
-            state.rules = setRule(state.rules, tx.tekst, categoryId);
+            state.rules = setRule(state.rules, tx.tekst, categoryId, {
+              fraKontonummer: tx.fraKontonummer,
+              tilKontonummer: tx.tilKontonummer,
+            });
           }
         });
         
@@ -489,6 +510,11 @@ export function createActions(
             type: t.type,
             tekst: t.tekst,
             underkategori: t.underkategori,
+            originaltBeløp: t.originaltBeløp,
+            originalValuta: t.originalValuta,
+            kid: t.kid,
+            hovedkategori: t.hovedkategori,
+            bankId: t.bankId,
           })),
           engineState
         );
@@ -521,10 +547,22 @@ export function createActions(
         get().applyRulesToAll();
       });
     },
-    
-    deleteRuleAction: (tekst) => {
+
+    updateRuleCategory: (ruleKey, categoryId) => {
       set((state: TransactionStoreState) => {
-        state.rules = deleteRule(state.rules, tekst);
+        const existing = state.rules.get(ruleKey);
+        if (!existing) return;
+        state.rules = setRule(state.rules, existing.tekst, categoryId, {
+          fraKontonummer: existing.fraKontonummer,
+          tilKontonummer: existing.tilKontonummer,
+        });
+        get().applyRulesToAll();
+      });
+    },
+    
+    deleteRuleAction: (ruleKey) => {
+      set((state: TransactionStoreState) => {
+        state.rules = deleteRule(state.rules, ruleKey);
         
         // Re-apply rules to transactions
         get().applyRulesToAll();
@@ -657,6 +695,11 @@ export function createActions(
             type: t.type,
             tekst: t.tekst,
             underkategori: t.underkategori,
+            originaltBeløp: t.originaltBeløp,
+            originalValuta: t.originalValuta,
+            kid: t.kid,
+            hovedkategori: t.hovedkategori,
+            bankId: t.bankId,
           })),
           engineState
         );

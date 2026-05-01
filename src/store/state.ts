@@ -146,7 +146,10 @@ export interface TransactionStoreActions {
   
   // Rule Management
   createRule: (tekst: string, categoryId: string) => void;
-  deleteRuleAction: (tekst: string) => void;
+  /** Updates category for an existing rule (preserves account-specific key when present). */
+  updateRuleCategory: (ruleKey: string, categoryId: string) => void;
+  /** Pass `rule.ruleKey` from UI (composite or legacy tekst key). */
+  deleteRuleAction: (ruleKey: string) => void;
   
   // Lock Management
   lockTransactionAction: (

@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { generateTransactionId, generateContentHash, CategorizedTransaction } from '../categoryEngine';
+import {
+  generateTransactionId,
+  generateContentHash,
+  generateComparableContentHashes,
+  generateSoftMatchKey,
+  CategorizedTransaction,
+} from '../categoryEngine';
+import { parseCSV, normalizeTransactionDate } from '../csvParser';
 import { useTransactionStore } from '../src/store';
 
 const makeTx = (overrides: Partial<{
@@ -81,6 +88,28 @@ describe('generateContentHash', () => {
   it('matches generateTransactionId output for transactions without bankId', () => {
     const tx = makeTx();
     expect(generateContentHash(tx)).toBe(generateTransactionId(tx));
+  });
+});
+
+describe('date normalization for migration matching', () => {
+  it('normalizes CSV ISO dates to dd.mm.yyyy', () => {
+    const result = parseCSV([
+      'Dato;Beløp;Til konto;Til kontonummer;Fra konto;Fra kontonummer;Type;Tekst;Underkategori',
+      '2026-01-01;-500;REMA;;Brukskonto;;Betaling;REMA 1000;',
+    ].join('\n'));
+
+    expect(result.transactions[0].dato).toBe('01.01.2026');
+  });
+
+  it('builds comparable hashes across legacy and normalized date formats', () => {
+    const legacy = makeTx({ dato: '2026-01-01' });
+    const normalized = makeTx({ dato: '01.01.2026' });
+
+    const legacyHashes = new Set(generateComparableContentHashes(legacy));
+    const normalizedHashes = generateComparableContentHashes(normalized);
+
+    expect(normalizedHashes.some((hash) => legacyHashes.has(hash))).toBe(true);
+    expect(normalizeTransactionDate('01.01.26')).toBe('01.01.2026');
   });
 });
 
@@ -358,5 +387,138 @@ describe('CSV-to-Excel migration (dual lookup)', () => {
     expect(migrated.transactionId).toBe('BANK-X');
     expect(migrated.categoryId).toBe('cat_mat');
     expect(migrated.isLocked).toBe(true);
+  });
+
+});
+
+describe('generateSoftMatchKey', () => {
+  it('matches transactions with different type casing', () => {
+    const csv = makeTx({ dato: '15.01.2026', beløp: -200, type: 'VISA VARE', tekst: 'REMA 1000', fraKonto: 'Brukskonto', tilKonto: 'REMA' });
+    const excel = makeTx({ dato: '15.01.2026', beløp: -200, type: 'Visa vare', tekst: 'REMA 1000', fraKonto: 'Brukskonto', tilKonto: 'REMA' });
+    expect(generateSoftMatchKey(csv)).toBe(generateSoftMatchKey(excel));
+  });
+
+  it('matches transactions with different tekst', () => {
+    const csv = makeTx({ dato: '15.01.2026', beløp: -200, type: 'Betaling', tekst: 'REMA 1000 Oslo S', fraKonto: 'Brukskonto', tilKonto: 'REMA' });
+    const excel = makeTx({ dato: '15.01.2026', beløp: -200, type: 'Betaling', tekst: 'REMA 1000', fraKonto: 'Brukskonto', tilKonto: 'REMA' });
+    expect(generateSoftMatchKey(csv)).toBe(generateSoftMatchKey(excel));
+  });
+
+  it('matches transactions with swapped fraKonto/tilKonto', () => {
+    const csv = makeTx({ dato: '15.01.2026', beløp: -1000, type: 'Overføring', tekst: 'Til sparekonto', fraKonto: 'Sparekonto', tilKonto: 'Brukskonto' });
+    const excel = makeTx({ dato: '15.01.2026', beløp: -1000, type: 'Overføring', tekst: 'Til sparekonto', fraKonto: 'Brukskonto', tilKonto: 'Sparekonto' });
+    expect(generateSoftMatchKey(csv)).toBe(generateSoftMatchKey(excel));
+  });
+
+  it('normalizes different date formats before matching', () => {
+    const csv = makeTx({ dato: '2026-01-15', beløp: -200, fraKonto: 'A', tilKonto: 'B' });
+    const excel = makeTx({ dato: '15.01.2026', beløp: -200, fraKonto: 'A', tilKonto: 'B' });
+    expect(generateSoftMatchKey(csv)).toBe(generateSoftMatchKey(excel));
+  });
+
+  it('does NOT match when amount differs', () => {
+    const a = makeTx({ dato: '15.01.2026', beløp: -200, fraKonto: 'A', tilKonto: 'B' });
+    const b = makeTx({ dato: '15.01.2026', beløp: -201, fraKonto: 'A', tilKonto: 'B' });
+    expect(generateSoftMatchKey(a)).not.toBe(generateSoftMatchKey(b));
+  });
+
+  it('does NOT match when date differs', () => {
+    const a = makeTx({ dato: '15.01.2026', beløp: -200, fraKonto: 'A', tilKonto: 'B' });
+    const b = makeTx({ dato: '16.01.2026', beløp: -200, fraKonto: 'A', tilKonto: 'B' });
+    expect(generateSoftMatchKey(a)).not.toBe(generateSoftMatchKey(b));
+  });
+
+  it('does NOT match when accounts differ', () => {
+    const a = makeTx({ dato: '15.01.2026', beløp: -200, fraKonto: 'A', tilKonto: 'B' });
+    const b = makeTx({ dato: '15.01.2026', beløp: -200, fraKonto: 'A', tilKonto: 'C' });
+    expect(generateSoftMatchKey(a)).not.toBe(generateSoftMatchKey(b));
+  });
+});
+
+describe('pre-2026 safety during import pruning', () => {
+  beforeEach(() => {
+    useTransactionStore.getState().reset();
+  });
+
+  it('does NOT remove pre-2026 transactions without bankId', () => {
+    const pre2026 = toCategorized(makeTx({ dato: '15.12.2025', beløp: -500, tekst: 'Gammel tx' }));
+    const in2026NoBankId = toCategorized(makeTx({ dato: '15.01.2026', beløp: -200, tekst: 'CSV ghost' }));
+    const in2026WithBankId = toCategorized(makeTx({ dato: '15.01.2026', beløp: -300, tekst: 'Excel tx', bankId: 'B001' }));
+
+    useTransactionStore.getState().importTransactions([pre2026, in2026NoBankId, in2026WithBankId]);
+    expect(useTransactionStore.getState().transactions).toHaveLength(3);
+
+    // Simulate pruning: remove 2026+ without bankId
+    const CUTOFF_2026 = new Date(2026, 0, 1).getTime();
+    const toTimestamp = (d: string) => {
+      if (d.includes('.')) {
+        const [day, month, yearRaw] = d.split('.');
+        const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
+        return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+      }
+      return new Date(d).getTime();
+    };
+
+    const pruned = useTransactionStore.getState().transactions.filter(
+      t => !!t.bankId || toTimestamp(t.dato) < CUTOFF_2026
+    );
+
+    expect(pruned).toHaveLength(2);
+    expect(pruned.find(t => t.tekst === 'Gammel tx')).toBeDefined();
+    expect(pruned.find(t => t.tekst === 'Excel tx')).toBeDefined();
+    expect(pruned.find(t => t.tekst === 'CSV ghost')).toBeUndefined();
+  });
+
+  it('preserves all pre-2026 transactions regardless of bankId status', () => {
+    const txs = [
+      toCategorized(makeTx({ dato: '01.06.2025', beløp: -100, tekst: 'Old 1' })),
+      toCategorized(makeTx({ dato: '15.11.2025', beløp: -200, tekst: 'Old 2' })),
+      toCategorized(makeTx({ dato: '31.12.2025', beløp: -300, tekst: 'Old 3' })),
+      toCategorized(makeTx({ dato: '01.01.2026', beløp: -400, tekst: 'New without bankId' })),
+      toCategorized(makeTx({ dato: '01.01.2026', beløp: -500, tekst: 'New with bankId', bankId: 'B999' })),
+    ];
+
+    useTransactionStore.getState().importTransactions(txs);
+
+    const CUTOFF_2026 = new Date(2026, 0, 1).getTime();
+    const toTimestamp = (d: string) => {
+      const [day, month, year] = d.split('.');
+      return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+    };
+
+    const pre2026Before = txs.filter(t => toTimestamp(t.dato) < CUTOFF_2026);
+    const pruned = txs.filter(t => !!t.bankId || toTimestamp(t.dato) < CUTOFF_2026);
+    const pre2026After = pruned.filter(t => toTimestamp(t.dato) < CUTOFF_2026);
+
+    expect(pre2026Before.length).toBe(3);
+    expect(pre2026After.length).toBe(3);
+    expect(pre2026Before.length).toBe(pre2026After.length);
+  });
+});
+
+describe('CSV-to-Excel migration with soft-match fallback', () => {
+  beforeEach(() => {
+    useTransactionStore.getState().reset();
+  });
+
+  it('preserves bankId and locked category after applyRulesToAll runs', () => {
+    const migratedTx = toCategorized(makeTx({
+      dato: '01.01.2026',
+      tekst: 'REMA 1000',
+      beløp: -200,
+      bankId: 'BANK-LOCKED',
+    }));
+    migratedTx.categoryId = 'cat_mat';
+
+    useTransactionStore.getState().importTransactions([migratedTx]);
+    useTransactionStore.getState().lockTransactionAction('BANK-LOCKED', 'cat_mat');
+
+    useTransactionStore.getState().applyRulesToAll();
+
+    const stored = useTransactionStore.getState().transactions[0];
+    expect(stored.bankId).toBe('BANK-LOCKED');
+    expect(stored.transactionId).toBe('BANK-LOCKED');
+    expect(stored.categoryId).toBe('cat_mat');
+    expect(stored.isLocked).toBe(true);
   });
 });

@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { normalizeTransactionDate } from './csvParser';
 import type { Transaction, ParseResult } from './csvParser';
 
 const COLUMN_MAP: Record<string, keyof Transaction> = {
@@ -27,15 +28,15 @@ function normalizeDate(value: unknown): string {
     const d = value.getDate().toString().padStart(2, '0');
     const m = (value.getMonth() + 1).toString().padStart(2, '0');
     const y = value.getFullYear();
-    return `${d}.${m}.${y}`;
+    return normalizeTransactionDate(`${d}.${m}.${y}`);
   }
   if (typeof value === 'number') {
     const date = XLSX.SSF.parse_date_code(value);
     const d = date.d.toString().padStart(2, '0');
     const m = date.m.toString().padStart(2, '0');
-    return `${d}.${m}.${date.y}`;
+    return normalizeTransactionDate(`${d}.${m}.${date.y}`);
   }
-  return String(value);
+  return normalizeTransactionDate(String(value));
 }
 
 function toNumber(value: unknown): number {

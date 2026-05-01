@@ -35,6 +35,27 @@ function parseNorwegianNumber(value: string): number {
 }
 
 /**
+ * Normalizes transaction dates to dd.mm.yyyy for new imports.
+ */
+export function normalizeTransactionDate(value: string): string {
+  const trimmed = value.trim();
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${day}.${month}.${year}`;
+  }
+
+  const shortNorwegianMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{2})$/);
+  if (shortNorwegianMatch) {
+    const [, day, month, year] = shortNorwegianMatch;
+    return `${day}.${month}.20${year}`;
+  }
+
+  return trimmed;
+}
+
+/**
  * Generates a unique hash for a transaction to detect duplicates
  * Based on: date, amount, type, and text (key identifying fields)
  */
@@ -90,7 +111,7 @@ export function parseCSV(csvContent: string): ParseResult {
     const columns = line.split(';');
 
     const transaction: Transaction = {
-      dato: columns[indices.dato]?.trim() || '',
+      dato: normalizeTransactionDate(columns[indices.dato]?.trim() || ''),
       beløp: parseNorwegianNumber(columns[indices.beløp]),
       tilKonto: columns[indices.tilKonto]?.trim() || '',
       tilKontonummer: columns[indices.tilKontonummer]?.trim() || '',

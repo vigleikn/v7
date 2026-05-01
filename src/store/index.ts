@@ -20,10 +20,12 @@ import {
 
 import {
   createActions,
+  applyFiltersToTransactions,
   createDefaultInntekterCategory,
   createDefaultSparingCategory,
   createDefaultOverfortCategory,
 } from './actions';
+import { getCategorizationStats, migrateRulesMapFromPersist } from '../../categoryEngine';
 
 // Export types for consumers
 export * from './state';
@@ -31,6 +33,32 @@ export * from './state';
 // ============================================================================
 // Storage Helper (Node.js fallback)
 // ============================================================================
+
+const normalizePersistedDateToIso = (value: unknown): string => {
+  if (typeof value !== 'string') return '';
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  // YYYY-MM-DD or YYYY-MM
+  if (trimmed.includes('-')) {
+    const [year, month, day] = trimmed.split('-');
+    if (!year || !month) return '';
+    return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${(day || '01').padStart(2, '0')}`;
+  }
+
+  // DD.MM.YYYY / DD.MM.YY
+  if (trimmed.includes('.')) {
+    const parts = trimmed.split('.');
+    if (parts.length === 3) {
+      const [day, month, yearRaw] = parts;
+      if (!day || !month || !yearRaw) return '';
+      const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw.padStart(4, '0');
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+  }
+
+  return '';
+};
 
 // Custom storage for Node.js environment (fallback to in-memory)
 const createStorage = () => {
@@ -82,45 +110,62 @@ export const useTransactionStore = create<TransactionStore>()(
         name: 'transaction-store',
         storage: {
           getItem: (name) => {
-            const str = createStorage().getItem(name);
-            if (!str) return null;
-            
-            const parsed = JSON.parse(str);
-            
-            // Reconstruct Maps from arrays
-            if (parsed.state) {
-              if (parsed.state.hovedkategorier && Array.isArray(parsed.state.hovedkategorier)) {
-                parsed.state.hovedkategorier = new Map(parsed.state.hovedkategorier);
-              }
-              if (parsed.state.underkategorier && Array.isArray(parsed.state.underkategorier)) {
-                parsed.state.underkategorier = new Map(parsed.state.underkategorier);
-              }
-              if (parsed.state.rules && Array.isArray(parsed.state.rules)) {
-                parsed.state.rules = new Map(parsed.state.rules);
-              }
-              if (parsed.state.locks && Array.isArray(parsed.state.locks)) {
-                parsed.state.locks = new Map(parsed.state.locks);
-              }
-              if (parsed.state.budgets && Array.isArray(parsed.state.budgets)) {
-                parsed.state.budgets = new Map(parsed.state.budgets);
-              } else if (!parsed.state.budgets) {
-                parsed.state.budgets = new Map();
-              }
-              if (parsed.state.startBalance) {
-                const { amount, date } = parsed.state.startBalance;
-                parsed.state.startBalance = {
-                  amount: typeof amount === 'number' ? amount : 0,
-                  date: typeof date === 'string' ? date.slice(0, 10) : '',
-                };
-                if (!parsed.state.startBalance.date) {
+            const storage = createStorage();
+            try {
+              const str = storage.getItem(name);
+              if (!str) return null;
+
+              const parsed = JSON.parse(str);
+
+              // Reconstruct Maps from arrays
+              if (parsed.state) {
+                if (parsed.state.hovedkategorier && Array.isArray(parsed.state.hovedkategorier)) {
+                  parsed.state.hovedkategorier = new Map(parsed.state.hovedkategorier);
+                }
+                if (parsed.state.underkategorier && Array.isArray(parsed.state.underkategorier)) {
+                  parsed.state.underkategorier = new Map(parsed.state.underkategorier);
+                }
+                if (parsed.state.rules && Array.isArray(parsed.state.rules)) {
+                  parsed.state.rules = migrateRulesMapFromPersist(
+                    new Map(parsed.state.rules)
+                  );
+                }
+                if (parsed.state.locks && Array.isArray(parsed.state.locks)) {
+                  parsed.state.locks = new Map(parsed.state.locks);
+                }
+                if (parsed.state.budgets && Array.isArray(parsed.state.budgets)) {
+                  parsed.state.budgets = new Map(parsed.state.budgets);
+                } else if (!parsed.state.budgets) {
+                  parsed.state.budgets = new Map();
+                }
+                if (parsed.state.startBalance) {
+                  const { amount, date } = parsed.state.startBalance;
+                  const normalizedDate = normalizePersistedDateToIso(date);
+                  parsed.state.startBalance = {
+                    amount: typeof amount === 'number' ? amount : 0,
+                    date: normalizedDate,
+                  };
+                  if (!parsed.state.startBalance.date) {
+                    parsed.state.startBalance = null;
+                  }
+                } else {
                   parsed.state.startBalance = null;
                 }
-              } else {
-                parsed.state.startBalance = null;
               }
+
+              return parsed;
+            } catch (err) {
+              console.warn(
+                `[TransactionStore] Ignoring corrupt persisted state for "${name}":`,
+                err instanceof Error ? err.message : err
+              );
+              try {
+                storage.removeItem(name);
+              } catch {
+                // ignore secondary failures (e.g. quota / private mode)
+              }
+              return null;
             }
-            
-            return parsed;
           },
           setItem: (name, value) => {
             createStorage().setItem(name, JSON.stringify(value));
@@ -129,14 +174,23 @@ export const useTransactionStore = create<TransactionStore>()(
             createStorage().removeItem(name);
           },
         },
-        partialize: (state) => ({
+        partialize: (state): any => ({
           hovedkategorier: Array.from(state.hovedkategorier.entries()),
           underkategorier: Array.from(state.underkategorier.entries()),
+          transactions: state.transactions,
           rules: Array.from(state.rules.entries()),
           locks: Array.from(state.locks.entries()),
           budgets: Array.from(state.budgets.entries()),
           startBalance: state.startBalance,
         }),
+        onRehydrateStorage: () => (state, error) => {
+          if (error || !state) return;
+          state.filteredTransactions = applyFiltersToTransactions(
+            state.transactions,
+            state.filters
+          );
+          state.stats = getCategorizationStats(state.transactions);
+        },
       }
     ),
     { name: 'TransactionStore' }

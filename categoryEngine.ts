@@ -18,8 +18,14 @@ export interface Category {
 }
 
 export interface CategoryRule {
-  tekst: string; // The text pattern to match
-  categoryId: string; // The category to apply
+  /** Map key in `rules` (legacy: normalized tekst only; specific: tekst||fra|til kontonummer). */
+  ruleKey: string;
+  /** Normalized display pattern (lowercase trimmed tekst). */
+  tekst: string;
+  categoryId: string;
+  /** Present when rule is account-specific (normalized kontonummer). */
+  fraKontonummer?: string;
+  tilKontonummer?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,7 +45,7 @@ export interface CategorizedTransaction extends Transaction {
 }
 
 export interface RuleEngineState {
-  rules: Map<string, CategoryRule>; // Map of tekst -> rule
+  rules: Map<string, CategoryRule>; // Map of ruleKey -> rule
   locks: Map<string, TransactionLock>; // Map of transactionId -> lock
   categories: Map<string, Category>; // Map of categoryId -> category
 }
@@ -71,12 +77,69 @@ export function generateTransactionId(transaction: Transaction): string {
   return `${transaction.dato}|${transaction.beløp}|${transaction.type}|${transaction.tekst}|${transaction.fraKonto}|${transaction.tilKonto}`;
 }
 
+function buildContentHash(date: string, transaction: Transaction): string {
+  return `${date}|${transaction.beløp}|${transaction.type}|${transaction.tekst}|${transaction.fraKonto}|${transaction.tilKonto}`;
+}
+
+/**
+ * Normalizes common bank date formats for migration comparisons.
+ */
+export function normalizeDateForComparison(date: string): string {
+  const trimmed = date.trim();
+
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    return `${day}.${month}.${year}`;
+  }
+
+  const dottedIsoMatch = trimmed.match(/^(\d{4})\.(\d{2})\.(\d{2})$/);
+  if (dottedIsoMatch) {
+    const [, year, month, day] = dottedIsoMatch;
+    return `${day}.${month}.${year}`;
+  }
+
+  const shortNorwegianMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{2})$/);
+  if (shortNorwegianMatch) {
+    const [, day, month, year] = shortNorwegianMatch;
+    return `${day}.${month}.20${year}`;
+  }
+
+  return trimmed;
+}
+
 /**
  * Generates a content-hash ID regardless of whether bankId exists.
  * Used for migrating locks from old content-hash keys to bank-ID keys.
  */
 export function generateContentHash(transaction: Transaction): string {
-  return `${transaction.dato}|${transaction.beløp}|${transaction.type}|${transaction.tekst}|${transaction.fraKonto}|${transaction.tilKonto}`;
+  return buildContentHash(transaction.dato, transaction);
+}
+
+/**
+ * Builds a soft-match key for CSV-to-Excel migration where strict content
+ * hashes fail due to field differences between export formats.
+ * Uses only fields proven stable across CSV/Excel: date, amount, and
+ * both account names sorted alphabetically (eliminates fra/til swap).
+ */
+export function generateSoftMatchKey(transaction: Transaction): string {
+  const date = normalizeDateForComparison(transaction.dato);
+  const accounts = [transaction.fraKonto || '', transaction.tilKonto || '']
+    .map(s => s.trim())
+    .sort()
+    .join('|');
+  return `${date}|${transaction.beløp}|${accounts}`;
+}
+
+/**
+ * Generates candidate hashes for legacy CSV rows and normalized Excel rows.
+ * This lets migration match old persisted hashes without breaking them.
+ */
+export function generateComparableContentHashes(transaction: Transaction): string[] {
+  const hashes = new Set<string>();
+  hashes.add(generateContentHash(transaction));
+  hashes.add(buildContentHash(normalizeDateForComparison(transaction.dato), transaction));
+  return Array.from(hashes);
 }
 
 /**
@@ -84,6 +147,59 @@ export function generateContentHash(transaction: Transaction): string {
  */
 function normalizeTekst(tekst: string): string {
   return tekst.trim().toLowerCase();
+}
+
+const RULE_KEY_ACCOUNT_SEP = '||';
+
+/**
+ * Normalizes kontonummer for stable rule keys (trim, remove spaces, lowercase).
+ */
+export function normalizeKontonummer(raw: string | undefined): string {
+  if (!raw) return '';
+  return raw.trim().replace(/\s+/g, '').toLowerCase();
+}
+
+export interface SetRuleContext {
+  fraKontonummer?: string;
+  tilKontonummer?: string;
+}
+
+/**
+ * Builds persisted map key: legacy `normalizeTekst(tekst)` or
+ * `normalizeTekst(tekst)||normFra|normTil` when both account numbers are present.
+ */
+export function buildRuleKey(
+  tekst: string,
+  fraKontonummer?: string,
+  tilKontonummer?: string
+): string {
+  const nt = normalizeTekst(tekst);
+  const nf = normalizeKontonummer(fraKontonummer);
+  const ntil = normalizeKontonummer(tilKontonummer);
+  if (nf && ntil) {
+    return `${nt}${RULE_KEY_ACCOUNT_SEP}${nf}|${ntil}`;
+  }
+  return nt;
+}
+
+/**
+ * Resolves which rule applies: account-specific first, then legacy tekst-only.
+ */
+export function findApplicableRule(
+  rules: Map<string, CategoryRule>,
+  transaction: Transaction
+): CategoryRule | undefined {
+  const specificKey = buildRuleKey(
+    transaction.tekst,
+    transaction.fraKontonummer,
+    transaction.tilKontonummer
+  );
+  const legacyKey = normalizeTekst(transaction.tekst);
+  if (specificKey !== legacyKey) {
+    const specific = rules.get(specificKey);
+    if (specific) return specific;
+  }
+  return rules.get(legacyKey);
 }
 
 // ============================================================================
@@ -160,49 +276,60 @@ export function listCategories(categories: Map<string, Category>): Category[] {
 // ============================================================================
 
 /**
- * Creates or updates a category rule for a specific text pattern
+ * Creates or updates a category rule for a text pattern (and optionally fra/til kontonummer).
  */
 export function setRule(
   rules: Map<string, CategoryRule>,
   tekst: string,
-  categoryId: string
+  categoryId: string,
+  context?: SetRuleContext
 ): Map<string, CategoryRule> {
+  const ruleKey = buildRuleKey(tekst, context?.fraKontonummer, context?.tilKontonummer);
   const normalizedTekst = normalizeTekst(tekst);
+  const nf = normalizeKontonummer(context?.fraKontonummer);
+  const ntil = normalizeKontonummer(context?.tilKontonummer);
   const newRules = new Map(rules);
-  
-  const existingRule = newRules.get(normalizedTekst);
+
+  const existingRule = newRules.get(ruleKey);
   const now = new Date();
-  
+
+  const baseFields = {
+    ruleKey,
+    tekst: normalizedTekst,
+    categoryId,
+    ...(nf && ntil ? { fraKontonummer: nf, tilKontonummer: ntil } : {}),
+  };
+
   if (existingRule) {
-    // Update existing rule
-    newRules.set(normalizedTekst, {
+    newRules.set(ruleKey, {
       ...existingRule,
-      categoryId,
+      ...baseFields,
       updatedAt: now,
     });
   } else {
-    // Create new rule
-    newRules.set(normalizedTekst, {
-      tekst: normalizedTekst,
-      categoryId,
+    newRules.set(ruleKey, {
+      ...baseFields,
       createdAt: now,
       updatedAt: now,
     });
   }
-  
+
   return newRules;
 }
 
 /**
- * Deletes a category rule
+ * Deletes a category rule by its map key (`ruleKey`). Exact match first; otherwise legacy tekst-only key.
  */
 export function deleteRule(
   rules: Map<string, CategoryRule>,
-  tekst: string
+  ruleKeyOrTekst: string
 ): Map<string, CategoryRule> {
-  const normalizedTekst = normalizeTekst(tekst);
   const newRules = new Map(rules);
-  newRules.delete(normalizedTekst);
+  if (newRules.has(ruleKeyOrTekst)) {
+    newRules.delete(ruleKeyOrTekst);
+    return newRules;
+  }
+  newRules.delete(normalizeTekst(ruleKeyOrTekst));
   return newRules;
 }
 
@@ -221,6 +348,26 @@ export function getRule(
  */
 export function listRules(rules: Map<string, CategoryRule>): CategoryRule[] {
   return Array.from(rules.values());
+}
+
+/**
+ * Ensures each rule has `ruleKey` and `tekst` after loading from JSON/persist (backward compatible).
+ */
+export function migrateRulesMapFromPersist(
+  rules: Map<string, CategoryRule>
+): Map<string, CategoryRule> {
+  const next = new Map<string, CategoryRule>();
+  for (const [key, rule] of rules) {
+    const fallbackTekst = key.includes(RULE_KEY_ACCOUNT_SEP)
+      ? key.split(RULE_KEY_ACCOUNT_SEP)[0]!
+      : key;
+    next.set(key, {
+      ...rule,
+      ruleKey: rule.ruleKey || key,
+      tekst: rule.tekst ? normalizeTekst(rule.tekst) : fallbackTekst,
+    });
+  }
+  return next;
 }
 
 // ============================================================================
@@ -313,8 +460,7 @@ export function applyRules(
   for (const transaction of transactions) {
     const transactionId = generateTransactionId(transaction);
     const lock = locks.get(transactionId);
-    const normalizedTekst = normalizeTekst(transaction.tekst);
-    const rule = rules.get(normalizedTekst);
+    const rule = findApplicableRule(rules, transaction);
 
     let categoryId: string | undefined;
     let isLocked = false;
@@ -377,17 +523,32 @@ export function categorizeTransaction(
   if (createRule) {
     newState = {
       ...newState,
-      rules: setRule(state.rules, transaction.tekst, categoryId),
+      rules: setRule(state.rules, transaction.tekst, categoryId, {
+        fraKontonummer: transaction.fraKontonummer,
+        tilKontonummer: transaction.tilKontonummer,
+      }),
     };
   }
 
-  // Find all transactions with the same tekst that are uncategorized and unlocked
   const normalizedTekst = normalizeTekst(transaction.tekst);
-  const affectedTransactions = transactions.filter(t => {
+  const newRuleKey = buildRuleKey(
+    transaction.tekst,
+    transaction.fraKontonummer,
+    transaction.tilKontonummer
+  );
+  const isSpecificRuleKey = newRuleKey !== normalizedTekst;
+
+  const affectedTransactions = transactions.filter((t) => {
     const matchesTekst = normalizeTekst(t.tekst) === normalizedTekst;
     const isNotLocked = !t.isLocked;
     const isUncategorized = !t.categoryId;
-    return matchesTekst && isNotLocked && isUncategorized;
+    if (!matchesTekst || !isNotLocked || !isUncategorized) return false;
+    if (createRule && isSpecificRuleKey) {
+      return (
+        buildRuleKey(t.tekst, t.fraKontonummer, t.tilKontonummer) === newRuleKey
+      );
+    }
+    return true;
   });
 
   return { state: newState, affectedTransactions };
@@ -407,7 +568,10 @@ export function createRuleFromTransaction(
 
   return {
     ...state,
-    rules: setRule(state.rules, transaction.tekst, transaction.categoryId),
+    rules: setRule(state.rules, transaction.tekst, transaction.categoryId, {
+      fraKontonummer: transaction.fraKontonummer,
+      tilKontonummer: transaction.tilKontonummer,
+    }),
   };
 }
 

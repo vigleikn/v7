@@ -12,6 +12,7 @@ import {
   getLast12Months,
   calculateMonthlyData,
   buildCategoryRows,
+  buildOverviewMonthColumns,
   CategoryRowData,
 } from '../services/monthlyCalculations';
 
@@ -59,12 +60,13 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
   };
 
   // Calculate monthly data
-  const { months, monthlyData, categoryRows } = useMemo(() => {
+  const { months, monthlyData, monthColumns, categoryRows } = useMemo(() => {
     const months = getLast12Months();
     const monthlyData = calculateMonthlyData(transactions, months, hovedkategorier, underkategorier);
+    const monthColumns = buildOverviewMonthColumns(monthlyData);
     const categoryRows = buildCategoryRows(monthlyData, hovedkategorier, underkategorier);
     
-    return { months, monthlyData, categoryRows };
+    return { months, monthlyData, monthColumns, categoryRows };
   }, [transactions, hovedkategorier, underkategorier]);
 
   // Toggle category expansion
@@ -211,8 +213,14 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
             </div>
           </td>
 
+          {/* Coefficient of Variation (CV) */}
+          <td className={`px-3 py-3 text-right tabular-nums text-gray-600 text-sm`}>
+            <RedactedValue value={row.cv !== null ? `${row.cv.toFixed(1)} %` : '–'} isRedacted={shouldRedact} />
+          </td>
+
           {/* Monthly values */}
-          {row.monthlyValues.map((value, idx) => {
+          {monthColumns.map((column) => {
+            const value = row.monthlyValues[column.sourceIndex] ?? 0;
             let cellColor = '';
             if (isBalanceRow) {
               cellColor = value >= 0 ? 'text-green-700' : 'text-red-700';
@@ -220,11 +228,11 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
             
             const isActive = 
               activeCell?.categoryId === row.categoryId && 
-              activeCell?.monthIndex === idx;
+              activeCell?.monthIndex === column.sourceIndex;
             
             return (
               <td 
-                key={idx} 
+                key={column.month} 
                 className={`px-3 py-3 text-right tabular-nums ${cellColor || textColor} ${
                   isCellClickable 
                     ? 'cursor-pointer hover:bg-blue-50 hover:font-semibold' 
@@ -236,9 +244,9 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
                   e.stopPropagation();
                   handleCellClick(
                     row.categoryId,
-                    idx,
+                    column.sourceIndex,
                     row.categoryName,
-                    monthlyData[idx].monthLabel,
+                    monthlyData[column.sourceIndex].monthLabel,
                     isCellClickable
                   );
                 }}
@@ -258,10 +266,6 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
             <RedactedValue value={formatAmount(row.avg)} isRedacted={shouldRedact} />
           </td>
 
-          {/* Coefficient of Variation (CV) */}
-          <td className={`px-3 py-3 text-right tabular-nums text-gray-600 text-sm`}>
-            <RedactedValue value={row.cv !== null ? `${row.cv.toFixed(1)} %` : '–'} isRedacted={shouldRedact} />
-          </td>
         </tr>
 
         {/* Render children if expanded or non-collapsible */}
@@ -294,7 +298,10 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
                   <th className="px-4 py-3 text-left font-semibold text-gray-700">
                     Kategori
                   </th>
-                  {monthlyData.map((m) => (
+                  <th className="px-3 py-3 text-right font-semibold text-gray-700">
+                    Variasjon (%)
+                  </th>
+                  {monthColumns.map((m) => (
                     <th 
                       key={m.month} 
                       className="px-3 py-3 text-right font-semibold text-gray-700"
@@ -307,9 +314,6 @@ export const OversiktPage: React.FC<OversiktPageProps> = ({ onNavigate }) => {
                   </th>
                   <th className="px-3 py-3 text-right font-semibold text-gray-700">
                     Snitt
-                  </th>
-                  <th className="px-3 py-3 text-right font-semibold text-gray-700">
-                    Variasjon (%)
                   </th>
                 </tr>
               </thead>

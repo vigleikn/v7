@@ -4,6 +4,7 @@
  */
 
 import { useTransactionStore } from '../src/store';
+import { generateSoftMatchKey, normalizeDateForComparison } from '../categoryEngine';
 
 // ============================================================================
 // Migration Functions
@@ -198,6 +199,114 @@ export function validateStoreState(): {
 }
 
 /**
+ * One-time cleanup of legacy 2026 CSV transactions that have a bankId counterpart.
+ * Transfers categoryId/isLocked from legacy to the bankId version before removal.
+ * Only runs if ghost duplicates exist; records completion in localStorage.
+ */
+export function cleanupGhostDuplicates(): { removed: number; categoriesTransferred: number } {
+  const MIGRATION_KEY = 'ghost-cleanup-v1-done';
+  if (typeof window !== 'undefined' && localStorage.getItem(MIGRATION_KEY)) {
+    return { removed: 0, categoriesTransferred: 0 };
+  }
+
+  const state = useTransactionStore.getState();
+  const transactions = state.transactions;
+
+  const toTimestamp = (dateStr: string): number => {
+    if (!dateStr) return 0;
+    if (dateStr.includes('.')) {
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        const [day, month, yearRaw] = parts;
+        const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
+        return new Date(Number(year), Number(month) - 1, Number(day)).getTime();
+      }
+    }
+    if (dateStr.includes('-')) return new Date(dateStr).getTime();
+    return new Date(dateStr).getTime();
+  };
+  const CUTOFF_2026 = new Date(2026, 0, 1).getTime();
+
+  const pre2026Before = transactions.filter(t => toTimestamp(t.dato) < CUTOFF_2026).length;
+
+  // Build soft-match index from bankId transactions (2026+)
+  const bankIdBySoftKey = new Map<string, typeof transactions[number][]>();
+  for (const t of transactions) {
+    if (!t.bankId) continue;
+    if (toTimestamp(t.dato) < CUTOFF_2026) continue;
+    const key = generateSoftMatchKey(t);
+    if (!bankIdBySoftKey.has(key)) bankIdBySoftKey.set(key, []);
+    bankIdBySoftKey.get(key)!.push(t);
+  }
+
+  // Find legacy (no bankId, 2026+) ghosts that match a bankId transaction.
+  // Never mutate store transaction objects (Immer/Zustand freeze) — collect updates for importTransactions.
+  const ghostIds = new Set<string>();
+  let categoriesTransferred = 0;
+  const bankIdCategoryTransfer = new Map<string, { categoryId: string; isLocked: boolean }>();
+
+  for (const t of transactions) {
+    if (t.bankId) continue;
+    if (toTimestamp(t.dato) < CUTOFF_2026) continue;
+
+    const key = generateSoftMatchKey(t);
+    const matches = bankIdBySoftKey.get(key);
+    if (matches && matches.length > 0) {
+      const target = matches[0];
+      if (t.categoryId && !target.categoryId) {
+        bankIdCategoryTransfer.set(target.id, {
+          categoryId: t.categoryId,
+          isLocked: Boolean(t.isLocked),
+        });
+        categoriesTransferred++;
+      }
+      ghostIds.add(t.id);
+    }
+  }
+
+  if (ghostIds.size === 0) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(MIGRATION_KEY, new Date().toISOString());
+    }
+    return { removed: 0, categoriesTransferred: 0 };
+  }
+
+  // Apply: remove ghosts, update bankId transactions with transferred categories
+  const cleaned = transactions.filter(t => !ghostIds.has(t.id));
+  // Apply transferred categories
+  const bankIdUpdates = new Map<string, { categoryId?: string; isLocked?: boolean }>();
+  for (const [, arr] of bankIdBySoftKey) {
+    for (const t of arr) {
+      if (t.categoryId) {
+        bankIdUpdates.set(t.id, { categoryId: t.categoryId, isLocked: Boolean(t.isLocked) });
+      }
+    }
+  }
+  for (const [id, u] of bankIdCategoryTransfer) {
+    bankIdUpdates.set(id, { categoryId: u.categoryId, isLocked: u.isLocked });
+  }
+  const final = cleaned.map(t =>
+    bankIdUpdates.has(t.id) ? { ...t, ...bankIdUpdates.get(t.id)! } : t
+  );
+
+  const pre2026After = final.filter(t => toTimestamp(t.dato) < CUTOFF_2026).length;
+  if (pre2026Before !== pre2026After) {
+    console.error('SAFETY: pre-2026 count changed! Aborting ghost cleanup.');
+    return { removed: 0, categoriesTransferred: 0 };
+  }
+
+  useTransactionStore.getState().importTransactions(final);
+
+  console.log(`🧹 Ghost cleanup: removed ${ghostIds.size} duplicates, transferred ${categoriesTransferred} categories`);
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(MIGRATION_KEY, new Date().toISOString());
+  }
+
+  return { removed: ghostIds.size, categoriesTransferred };
+}
+
+/**
  * Run full migration and cleanup
  */
 export function runStoreMigration(): void {
@@ -226,6 +335,16 @@ export function runStoreMigration(): void {
   
   // 3. Normalize budget fields
   ensureBudgetFields();
+
+  // 4. One-time ghost duplicate cleanup
+  console.log('\n🧹 Ghost Duplicate Cleanup:');
+  const ghostResult = cleanupGhostDuplicates();
+  if (ghostResult.removed > 0) {
+    console.log(`   Removed: ${ghostResult.removed} ghost duplicates`);
+    console.log(`   Categories transferred: ${ghostResult.categoriesTransferred}`);
+  } else {
+    console.log('   ✅ No ghost duplicates found (or already cleaned)');
+  }
   
   console.log('\n' + '='.repeat(70));
   console.log('✅ Migration complete\n');

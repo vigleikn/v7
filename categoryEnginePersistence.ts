@@ -3,7 +3,13 @@
  * Handles saving and loading state to/from JSON files
  */
 
-import { RuleEngineState, CategoryRule, TransactionLock, Category } from './categoryEngine';
+import {
+  RuleEngineState,
+  CategoryRule,
+  TransactionLock,
+  Category,
+  migrateRulesMapFromPersist,
+} from './categoryEngine';
 import { promises as fs } from 'fs';
 
 // ============================================================================
@@ -71,17 +77,18 @@ export function serializeState(state: RuleEngineState): SerializedState {
  * Deserializes a plain object back to RuleEngineState
  */
 export function deserializeState(serialized: SerializedState): RuleEngineState {
+  const rules = new Map(
+    serialized.rules.map(([key, rule]) => [
+      key,
+      {
+        ...rule,
+        createdAt: deserializeDate(rule.createdAt as any),
+        updatedAt: deserializeDate(rule.updatedAt as any),
+      },
+    ])
+  );
   return {
-    rules: new Map(
-      serialized.rules.map(([key, rule]) => [
-        key,
-        {
-          ...rule,
-          createdAt: deserializeDate(rule.createdAt as any),
-          updatedAt: deserializeDate(rule.updatedAt as any),
-        },
-      ])
-    ),
+    rules: migrateRulesMapFromPersist(rules),
     locks: new Map(
       serialized.locks.map(([key, lock]) => [
         key,

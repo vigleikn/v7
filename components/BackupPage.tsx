@@ -3,7 +3,7 @@
  * User interface for manual backup/restore and settings
  */
 
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Download, Upload, AlertCircle, CheckCircle, Info } from 'lucide-react';
 import { Sidebar } from './Sidebar';
 import { useTransactionStore } from '../src/store';
@@ -12,8 +12,12 @@ import {
   downloadBackup,
   parseBackupFile,
   restoreFromBackup,
+  mergeFromBackup,
   shouldBackupToday,
+  chooseAutoBackupDirectory,
+  getAutoBackupStatus,
   BackupData,
+  AutoBackupStatus,
 } from '../services/autoBackup';
 import { Button } from './ui/button';
 import { Card, CardHeader, CardContent } from './ui/card';
@@ -38,6 +42,7 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
   const [previewData, setPreviewData] = useState<BackupData | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [autoBackupStatus, setAutoBackupStatus] = useState<AutoBackupStatus>(() => getAutoBackupStatus());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const transactions = useTransactionStore((state) => state.transactions);
@@ -46,6 +51,10 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
   const rules = useTransactionStore((state) => state.rules);
 
   const formatNumber = (value: number) => Math.round(value).toLocaleString('no');
+
+  useEffect(() => {
+    setAutoBackupStatus(getAutoBackupStatus());
+  }, []);
 
   const handleNavigate = (page: string) => {
     if (onNavigate) {
@@ -68,6 +77,26 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
         text: `❌ Eksport feilet: ${error instanceof Error ? error.message : 'Ukjent feil'}`,
       });
     }
+  };
+
+  const handleChooseBackupDirectory = async () => {
+    setMessage(null);
+
+    const result = await chooseAutoBackupDirectory();
+    setAutoBackupStatus(getAutoBackupStatus());
+
+    if (result.success) {
+      setMessage({
+        type: 'success',
+        text: `✅ Backupmappe valgt: ${result.directoryName}. Appen lagrer automatisk dit når nettleseren gir tilgang.`,
+      });
+      return;
+    }
+
+    setMessage({
+      type: 'error',
+      text: `❌ Kunne ikke velge backupmappe: ${result.error}`,
+    });
   };
 
   // Handle file selection
@@ -158,6 +187,35 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleConfirmMergeRestore = () => {
+    if (!previewData) return;
+
+    const result = mergeFromBackup(previewData);
+
+    if (result.success) {
+      setMessage({
+        type: 'success',
+        text:
+          `✅ Backup flettet inn! ` +
+          `${result.addedTransactions ?? 0} nye transaksjoner lagt til, ` +
+          `${result.skippedTransactions ?? 0} duplikater hoppet over. ` +
+          `Totalt: ${(result.totalTransactions ?? 0).toLocaleString('no')}.`,
+      });
+    } else {
+      setMessage({
+        type: 'error',
+        text: `❌ Fletting feilet: ${result.error}`,
+      });
+    }
+
+    setShowConfirmDialog(false);
+    setPreviewData(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
   // Cancel restore
   const handleCancelRestore = () => {
     setShowConfirmDialog(false);
@@ -168,8 +226,8 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
     }
   };
 
-  const lastBackupDate = typeof window !== 'undefined' 
-    ? localStorage.getItem('last-backup-date') 
+  const lastBackupDate = typeof window !== 'undefined'
+    ? localStorage.getItem('last-backup-date')
     : null;
 
   const needsBackup = shouldBackupToday();
@@ -231,10 +289,48 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
                     <span className="font-medium">{lastBackupDate}</span>
                   </div>
                 )}
-                <p className="text-sm text-gray-600 mt-4">
-                  ℹ️ Appen laster automatisk ned en backup-fil første gang du åpner den hver dag
-                  (hvis du har data). Filen lastes ned til din nedlastningsmappe.
-                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-700">Backupmappe:</span>
+                  <span className="font-medium text-right">
+                    {autoBackupStatus.directoryName || 'Ikke valgt'}
+                  </span>
+                </div>
+                {autoBackupStatus.lastCompletedAt && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-700">Sist lagret:</span>
+                    <span className="font-medium text-right">
+                      {new Date(autoBackupStatus.lastCompletedAt).toLocaleString('no')}
+                    </span>
+                  </div>
+                )}
+                {autoBackupStatus.lastFilename && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-700">Siste fil:</span>
+                    <span className="font-mono text-sm text-right">
+                      {autoBackupStatus.lastFilename}
+                    </span>
+                  </div>
+                )}
+                <Button
+                  onClick={handleChooseBackupDirectory}
+                  disabled={!autoBackupStatus.supportsDirectoryPicker}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Velg backupmappe
+                </Button>
+                {!autoBackupStatus.supportsDirectoryPicker ? (
+                  <p className="text-sm text-orange-700 bg-orange-50 border border-orange-200 rounded-lg p-3">
+                    Nettleseren din støtter ikke automatisk lagring til valgt mappe. Appen bruker
+                    vanlig nedlasting som fallback.
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-600 mt-4">
+                    Appen prøver å lagre automatisk til valgt mappe første gang du åpner den hver
+                    dag med data. Hvis nettleseren mangler mappetilgang, brukes vanlig nedlasting
+                    som fallback.
+                  </p>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -372,10 +468,11 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
                 <div>
                   <h3 className="font-semibold mb-2">Automatisk daglig backup:</h3>
                   <p>
-                    Første gang du åpner appen hver dag (hvis du har data), lastes en backup-fil
-                    automatisk ned til din nedlastningsmappe med navn{' '}
+                    Første gang du åpner appen hver dag (hvis du har data), lagres en backup-fil
+                    automatisk til valgt mappe der nettleseren støtter det. Ellers lastes filen ned
+                    som vanlig med navn{' '}
                     <code className="bg-gray-100 px-1 py-0.5 rounded">
-                      transaction-backup-YYYY-MM-DD.json
+                      transaction-backup-YYYY-MM-DD-HHMMSS.json
                     </code>
                   </p>
                 </div>
@@ -453,7 +550,10 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
                     </div>
                   </div>
                   <p className="text-red-600 font-medium">
-                    ⚠️ Dette vil erstatte alle nåværende data!
+                    ⚠️ "Gjenopprett" erstatter alle nåværende data.
+                  </p>
+                  <p className="text-green-700 font-medium">
+                    ✅ "Flett inn" beholder nåværende data og legger til manglende transaksjoner.
                   </p>
                 </div>
               )}
@@ -461,8 +561,11 @@ export const BackupPage: React.FC<BackupPageProps> = ({ onNavigate }) => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={handleCancelRestore}>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmMergeRestore}>
+              Flett inn
+            </AlertDialogAction>
             <AlertDialogAction onClick={handleConfirmRestore}>
-              Ja, gjenopprett
+              Erstatt med backup
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -7,8 +7,10 @@ import React, { useMemo, useState } from 'react';
 import { useTransactionStore } from '../src/store';
 import { CategoryRule } from '../categoryEngine';
 import { Sidebar } from './Sidebar';
+import { CategoryCombobox } from './CategoryCombobox';
 import { Card, CardHeader, CardContent } from './ui/card';
 import { Button } from './ui/button';
+import { buildAllCategoryOptions } from '../services/categoryOptions';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -35,8 +37,10 @@ interface GroupedRules {
 
 export const RulesPage: React.FC<RulesPageProps> = ({ onNavigate }) => {
   const [activePage] = useState('regler');
-  const [deletingRule, setDeletingRule] = useState<string | null>(null);
-  const [editingRule, setEditingRule] = useState<string | null>(null);
+  const [deletingRuleKey, setDeletingRuleKey] = useState<string | null>(null);
+  const [deletingRuleLabel, setDeletingRuleLabel] = useState<string>('');
+  const [editingRuleKey, setEditingRuleKey] = useState<string | null>(null);
+  const [editingRuleLabel, setEditingRuleLabel] = useState<string>('');
   const [editingCategoryId, setEditingCategoryId] = useState<string>('');
 
   const rules = useTransactionStore((state) => Array.from(state.rules.values()));
@@ -47,7 +51,7 @@ export const RulesPage: React.FC<RulesPageProps> = ({ onNavigate }) => {
     Array.from(state.underkategorier.values())
   );
   const deleteRuleAction = useTransactionStore((state) => state.deleteRuleAction);
-  const createRule = useTransactionStore((state) => state.createRule);
+  const updateRuleCategory = useTransactionStore((state) => state.updateRuleCategory);
 
   const handleNavigate = (page: string) => {
     if (onNavigate) {
@@ -95,52 +99,48 @@ export const RulesPage: React.FC<RulesPageProps> = ({ onNavigate }) => {
     return grouped;
   }, [rules, categoryMap]);
 
-  // Get all categories for dropdown (sorted)
   const allCategories = useMemo(() => {
-    const categories: Array<{ id: string; name: string; icon?: string }> = [];
-    
-    hovedkategorier.forEach((hk) => {
-      categories.push({ id: hk.id, name: hk.name, icon: hk.icon });
-      hk.underkategorier?.forEach((ukId) => {
-        const uk = underkategorier.find((u) => u.id === ukId);
-        if (uk) {
-          categories.push({ id: uk.id, name: uk.name });
-        }
-      });
-    });
-
-    // Sort alphabetically
-    categories.sort((a, b) => a.name.localeCompare(b.name, 'no'));
-    return categories;
+    return buildAllCategoryOptions(hovedkategorier, underkategorier);
   }, [hovedkategorier, underkategorier]);
 
-  const handleDeleteClick = (tekst: string) => {
-    setDeletingRule(tekst);
+  const ruleDisplayLabel = (rule: CategoryRule): string => {
+    if (rule.fraKontonummer && rule.tilKontonummer) {
+      return `${rule.tekst} (fra ${rule.fraKontonummer} → til ${rule.tilKontonummer})`;
+    }
+    return rule.tekst;
+  };
+
+  const handleDeleteClick = (rule: CategoryRule) => {
+    setDeletingRuleKey(rule.ruleKey);
+    setDeletingRuleLabel(ruleDisplayLabel(rule));
   };
 
   const handleDeleteConfirm = () => {
-    if (deletingRule) {
-      deleteRuleAction(deletingRule);
-      setDeletingRule(null);
+    if (deletingRuleKey) {
+      deleteRuleAction(deletingRuleKey);
+      setDeletingRuleKey(null);
+      setDeletingRuleLabel('');
     }
   };
 
   const handleEditClick = (rule: CategoryRule) => {
-    setEditingRule(rule.tekst);
+    setEditingRuleKey(rule.ruleKey);
+    setEditingRuleLabel(ruleDisplayLabel(rule));
     setEditingCategoryId(rule.categoryId);
   };
 
   const handleEditSave = () => {
-    if (editingRule && editingCategoryId) {
-      // Use createRule to update (it handles both create and update)
-      createRule(editingRule, editingCategoryId);
-      setEditingRule(null);
+    if (editingRuleKey && editingCategoryId) {
+      updateRuleCategory(editingRuleKey, editingCategoryId);
+      setEditingRuleKey(null);
+      setEditingRuleLabel('');
       setEditingCategoryId('');
     }
   };
 
   const handleEditCancel = () => {
-    setEditingRule(null);
+    setEditingRuleKey(null);
+    setEditingRuleLabel('');
     setEditingCategoryId('');
   };
 
@@ -161,7 +161,8 @@ export const RulesPage: React.FC<RulesPageProps> = ({ onNavigate }) => {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Regler</h1>
             <p className="text-gray-600 mt-2">
-              Oversikt over alle kategoriregler. Regler matcher transaksjoner basert på tekst-feltet.
+              Regler matcher først på tekst og fra/til-kontonummer når begge finnes; ellers på tekst
+              som før (globale regler).
             </p>
           </div>
 
@@ -191,13 +192,18 @@ export const RulesPage: React.FC<RulesPageProps> = ({ onNavigate }) => {
                       <div className="space-y-1.5">
                         {group.rules.map((rule) => (
                           <div
-                            key={rule.tekst}
+                            key={rule.ruleKey}
                             className="flex items-center justify-between p-2 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
                           >
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-gray-900">
                                 {rule.tekst}
                               </div>
+                              {rule.fraKontonummer && rule.tilKontonummer ? (
+                                <div className="text-xs text-gray-500 mt-0.5 truncate">
+                                  Fra {rule.fraKontonummer} → til {rule.tilKontonummer}
+                                </div>
+                              ) : null}
                             </div>
                             <div className="flex items-center gap-2 ml-4">
                               <Button
@@ -212,7 +218,7 @@ export const RulesPage: React.FC<RulesPageProps> = ({ onNavigate }) => {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleDeleteClick(rule.tekst)}
+                                onClick={() => handleDeleteClick(rule)}
                                 className="h-7 w-7"
                                 title="Slett regel"
                               >
@@ -238,19 +244,32 @@ export const RulesPage: React.FC<RulesPageProps> = ({ onNavigate }) => {
           )}
 
           {/* Delete confirmation dialog */}
-          <AlertDialog open={!!deletingRule} onOpenChange={(open) => !open && setDeletingRule(null)}>
+          <AlertDialog
+            open={!!deletingRuleKey}
+            onOpenChange={(open) => {
+              if (!open) {
+                setDeletingRuleKey(null);
+                setDeletingRuleLabel('');
+              }
+            }}
+          >
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Slett regel?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Er du sikker på at du vil slette regelen "{deletingRule}"?
+                  Er du sikker på at du vil slette regelen «{deletingRuleLabel}»?
                   <span className="block mt-2">
                     Transaksjoner som matcher denne regelen vil ikke lenger bli automatisk kategorisert.
                   </span>
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel onClick={() => setDeletingRule(null)}>
+                <AlertDialogCancel
+                  onClick={() => {
+                    setDeletingRuleKey(null);
+                    setDeletingRuleLabel('');
+                  }}
+                >
                   Avbryt
                 </AlertDialogCancel>
                 <AlertDialogAction
@@ -264,30 +283,24 @@ export const RulesPage: React.FC<RulesPageProps> = ({ onNavigate }) => {
           </AlertDialog>
 
           {/* Edit rule dialog */}
-          <AlertDialog open={!!editingRule} onOpenChange={(open) => !open && handleEditCancel()}>
+          <AlertDialog open={!!editingRuleKey} onOpenChange={(open) => !open && handleEditCancel()}>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Endre regel</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Velg ny kategori for regelen "{editingRule}".
+                  Velg ny kategori for regelen «{editingRuleLabel}».
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <div className="mt-4">
                 <label className="text-sm font-medium text-gray-700 mb-2 block">
                   Kategori
                 </label>
-                <select
+                <CategoryCombobox
                   value={editingCategoryId}
-                  onChange={(e) => setEditingCategoryId(e.target.value)}
-                  className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                >
-                  <option value="">Velg kategori</option>
-                  {allCategories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.icon && cat.icon !== '📁' ? `${cat.icon} ${cat.name}` : cat.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setEditingCategoryId}
+                  options={allCategories}
+                  placeholder="Velg kategori"
+                />
               </div>
               <AlertDialogFooter>
                 <AlertDialogCancel onClick={handleEditCancel}>
